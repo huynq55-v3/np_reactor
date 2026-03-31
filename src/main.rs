@@ -31,8 +31,12 @@ impl GameState {
         let solution: Vec<bool> = (0..n).map(|_| rng.random_bool(0.5)).collect();
         let mut clauses = Vec::new();
 
-        for _ in 0..m {
-            let k = rng.random_range(3..=3.min(n));
+        // BẢO VỆ ĐÂY: Sổ ghi chép các ngoặc đã xuất hiện
+        let mut seen_clauses = HashSet::new();
+
+        // Thay vì dùng for, ta dùng while để đảm bảo sinh ĐỦ m cái ngoặc KHÁC NHAU
+        while clauses.len() < m {
+            let k = rng.random_range(3..=3.min(n)); // Ông đang set cứng 3 ở đây
 
             let mut available_vars: Vec<usize> = (0..n).collect();
             available_vars.shuffle(&mut rng);
@@ -54,7 +58,7 @@ impl GameState {
                 literals[lucky].1 = !literals[lucky].1;
             }
 
-            // Ép danh sách các ô vuông sắp xếp tăng dần theo index của biến (V0 -> V1 -> V2)
+            // Sắp xếp thứ tự biến như cũ
             literals.sort_by_key(|&(v_idx, _)| v_idx);
 
             // KIỂM TRA TRÙNG LẶP: Nếu insert thành công (tức là chưa từng xuất hiện)
