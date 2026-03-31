@@ -1,6 +1,7 @@
 use ::rand::RngExt;
 use ::rand::seq::SliceRandom; // Thêm :: để chỉ định rõ thư viện bên ngoài
 use macroquad::prelude::*; // Thêm ::
+use std::collections::HashSet;
 
 // ==========================================
 // CẤU TRÚC DỮ LIỆU
@@ -53,7 +54,13 @@ impl GameState {
                 literals[lucky].1 = !literals[lucky].1;
             }
 
-            clauses.push(Clause { literals });
+            // Ép danh sách các ô vuông sắp xếp tăng dần theo index của biến (V0 -> V1 -> V2)
+            literals.sort_by_key(|&(v_idx, _)| v_idx);
+
+            // KIỂM TRA TRÙNG LẶP: Nếu insert thành công (tức là chưa từng xuất hiện)
+            if seen_clauses.insert(literals.clone()) {
+                clauses.push(Clause { literals });
+            }
         }
 
         Self {
