@@ -23,15 +23,15 @@ impl GameState {
         // Thêm :: vào trước rand
         let mut rng = ::rand::rng();
 
-        let m_min = (n as f32 * 2.5) as usize;
-        let m_max = (n as f32 * 4.5) as usize;
+        let m_min = (n as f32 * 4.26) as usize;
+        let m_max = (n as f32 * 4.26) as usize;
         let m = rng.random_range(m_min..=m_max);
 
         let solution: Vec<bool> = (0..n).map(|_| rng.random_bool(0.5)).collect();
         let mut clauses = Vec::new();
 
         for _ in 0..m {
-            let k = rng.random_range(2..=5.min(n));
+            let k = rng.random_range(3..=3.min(n));
 
             let mut available_vars: Vec<usize> = (0..n).collect();
             available_vars.shuffle(&mut rng);
@@ -226,41 +226,52 @@ async fn main() {
                 if !clause_sat {
                     unsat_count += 1;
 
-                    let mut clause_str = String::new();
-                    for (idx, &(v_idx, required_sign)) in clause.literals.iter().enumerate() {
-                        if !required_sign {
-                            clause_str.push_str("NOT ");
-                        }
-                        clause_str.push_str(&format!("V{}", v_idx));
-                        if idx < clause.literals.len() - 1 {
-                            clause_str.push_str(" OR ");
-                        }
-                    }
+                    // Thiết lập kích thước cho từng ô biến nhỏ
+                    let literal_w = 40.0;
+                    let literal_h = 30.0;
+                    let spacing = 5.0; // Khoảng cách giữa các ô trong cùng 1 ngoặc
 
-                    let text_dim = measure_text(&clause_str, None, 20, 1.0);
-                    let box_w = text_dim.width + 20.0;
-                    let box_h = 30.0;
+                    // Tính tổng chiều dài của cả cụm ngoặc này
+                    let clause_w = (literal_w + spacing) * clause.literals.len() as f32;
 
-                    if cx + box_w > sw - 20.0 {
+                    // Xuống dòng nếu cụm này vượt quá mép phải màn hình
+                    if cx + clause_w > sw - 20.0 {
                         cx = 20.0;
-                        cy += box_h + 10.0;
+                        cy += literal_h + 20.0;
                     }
 
-                    draw_rectangle(cx, cy, box_w, box_h, Color::new(0.5, 0.1, 0.1, 1.0));
-                    draw_rectangle_lines(cx, cy, box_w, box_h, 2.0, RED);
-                    draw_text(&clause_str, cx + 10.0, cy + 20.0, 20.0, WHITE);
+                    // Vẽ từng khung chữ nhật (biến) trong mệnh đề
+                    let mut lx = cx;
+                    for &(v_idx, required_sign) in &clause.literals {
+                        // Khung ĐỎ nếu là NOT (cần false), Khung XANH nếu bình thường (cần true)
+                        let bg_color = if !required_sign {
+                            Color::new(0.6, 0.1, 0.1, 1.0) // Đỏ tối
+                        } else {
+                            Color::new(0.1, 0.5, 0.1, 1.0) // Xanh lá tối
+                        };
 
-                    cx += box_w + 10.0;
+                        // Vẽ ô vuông và viền trắng cho sắc nét
+                        draw_rectangle(lx, cy, literal_w, literal_h, bg_color);
+                        draw_rectangle_lines(lx, cy, literal_w, literal_h, 1.0, WHITE);
+
+                        // In tên biến "V0", "V1" (bỏ hẳn chữ NOT) ra giữa ô
+                        let text = format!("V{}", v_idx);
+                        let text_dim = measure_text(&text, None, 20, 1.0);
+                        draw_text(
+                            &text,
+                            lx + (literal_w - text_dim.width) / 2.0,
+                            cy + (literal_h + text_dim.height) / 2.0 - 3.0,
+                            20.0,
+                            WHITE,
+                        );
+
+                        lx += literal_w + spacing;
+                    }
+
+                    // Dịch con trỏ cx sang phải, chừa 1 khoảng trống lớn (20.0) để tách biệt với ngoặc tiếp theo
+                    cx += clause_w + 20.0;
                 }
             }
-
-            draw_text(
-                &format!("{} clauses are still stubborn...", unsat_count),
-                20.0,
-                clauses_area_y - 5.0,
-                20.0,
-                ORANGE,
-            );
         }
 
         next_frame().await
