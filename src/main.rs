@@ -12,6 +12,34 @@ fn macroquad_getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
 getrandom::register_custom_getrandom!(macroquad_getrandom);
 
 // ==========================================
+// TỪ ĐIỂN BIỂU TƯỢNG (SYMBOL DICTIONARY)
+// ==========================================
+const MAX_N: usize = 25; // Chừa sẵn 30 biểu tượng để ông tăng N
+const VAR_SYMBOLS: [&str; MAX_N] = [
+    "⛾", "⛿", "☯", "☸", "⛩", "⛰", "⛱", "⛴", "⛷", "⛸", "⛹", "♸", "⚥", "☊", "☍", "☓", "☤", "🄰", "🄱",
+    "🆈", "🆉", "⚖", "♇", "♪", "♬",
+];
+
+// Hàm hỗ trợ vẽ Text Custom Font cho Unicode
+fn draw_sym(text: &str, x: f32, y: f32, size: f32, color: Color, font: Option<&Font>) {
+    draw_text_ex(
+        text,
+        x,
+        y,
+        TextParams {
+            font,
+            font_size: size as u16,
+            color,
+            ..Default::default()
+        },
+    );
+}
+
+fn measure_sym(text: &str, size: f32, font: Option<&Font>) -> TextDimensions {
+    measure_text(text, font, size as u16, 1.0)
+}
+
+// ==========================================
 // CẤU TRÚC DỮ LIỆU
 // ==========================================
 #[derive(Clone)]
@@ -125,8 +153,20 @@ impl GameState {
 // ==========================================
 // VÒNG LẶP GAME CHÍNH
 // ==========================================
-#[macroquad::main("NP-Hard")]
+#[macroquad::main("NP-Hard Symbolic")]
 async fn main() {
+    // Tải font Unicode
+    let font_bytes = std::fs::read("font.ttf");
+    let custom_font = match font_bytes {
+        Ok(bytes) => load_ttf_font_from_bytes(&bytes).ok(),
+        Err(_) => {
+            println!(
+                "CẢNH BÁO: Không tìm thấy file 'font.ttf'. Các ký hiệu Unicode có thể bị lỗi ô vuông!"
+            );
+            None
+        }
+    };
+
     let mut current_n = 4;
     let mut current_threshold = 1.0;
     let mut game = GameState::randomerate(current_n, current_threshold);
@@ -138,12 +178,11 @@ async fn main() {
         let sw = screen_width();
         let sh = screen_height();
 
-        // 1. TÍNH TOÁN TRƯỚC VỊ TRÍ LAYOUT (Để biết chừa bao nhiêu không gian cho UI ở trên)
+        // 1. TÍNH TOÁN TRƯỚC VỊ TRÍ LAYOUT
         let btn_w = if sw < 400.0 { (sw - 30.0) / 2.0 } else { 120.0 };
         let btn_h = 35.0;
         let gap = 10.0;
 
-        // Mô phỏng vị trí 4 nút Control để tìm y của dàn công tắc
         let mut temp_bx = 10.0;
         let mut temp_by = 50.0;
         for _ in 0..4 {
@@ -155,7 +194,6 @@ async fn main() {
         }
         let vars_area_y = temp_by + btn_h + 20.0;
 
-        // Mô phỏng vị trí Công tắc (ĐÃ LÀM NHỎ LẠI TỪ 45 -> 35)
         let var_size = 35.0;
         let var_gap = 10.0;
         let mut temp_vx = 10.0;
@@ -169,18 +207,16 @@ async fn main() {
         }
         let clauses_area_y = temp_vy + var_size + 30.0;
 
-        // 2. XỬ LÝ SCROLL TRƯỚC KHI VẼ
+        // 2. XỬ LÝ SCROLL
         let (_, mouse_wheel_y) = mouse_wheel();
-        scroll_y -= mouse_wheel_y * 20.0; // Cuộn bằng lăn chuột
+        scroll_y -= mouse_wheel_y * 20.0;
 
         if is_key_down(KeyCode::Up) {
             scroll_y -= 10.0;
-        } // Cuộn bằng phím lên
+        }
         if is_key_down(KeyCode::Down) {
             scroll_y += 10.0;
-        } // Cuộn bằng phím xuống
-
-        // Giới hạn cuộn
+        }
         scroll_y = scroll_y.clamp(0.0, max_scroll);
 
         // 3. XÓA NỀN & VẼ CÁC MỆNH ĐỀ (CUỘN ĐƯỢC)
@@ -188,13 +224,13 @@ async fn main() {
         clear_background(bg_color);
 
         let mut cx = 15.0;
-        let mut cy = clauses_area_y - scroll_y; // <--- TRỪ ĐI SCROLL_Y Ở ĐÂY
+        let mut cy = clauses_area_y - scroll_y;
 
         if game.is_won {
-            let win_text = "YOU WIN!";
+            let win_text = "RESONANCE ACHIEVED!";
             let text_dim = measure_text(win_text, None, 40, 1.0);
             draw_text(win_text, (sw - text_dim.width) / 2.0, cy + 80.0, 40.0, GOLD);
-            cy += 150.0; // Nới rộng max_scroll
+            cy += 150.0;
         } else {
             let mut unsat_count = 0;
             for clause in &game.clauses {
@@ -256,20 +292,22 @@ async fn main() {
 
                     draw_rectangle(lx, cy, literal_w, literal_h, bg_c);
 
-                    // Vẽ viền sáng cho con vừa lật (Tùy chọn)
                     if game.last_flipped == Some(v_idx) {
                         draw_rectangle_lines(lx, cy, literal_w, literal_h, 2.0, SKYBLUE);
                     }
 
-                    let text = format!("{}", v_idx);
-                    let text_dim = measure_text(&text, None, 16, 1.0);
-                    draw_text(
-                        &text,
+                    // VẼ KÝ HIỆU THAY VÌ CON SỐ
+                    let text = VAR_SYMBOLS[v_idx % MAX_N];
+                    let text_dim = measure_sym(text, 18.0, custom_font.as_ref());
+                    draw_sym(
+                        text,
                         lx + (literal_w - text_dim.width) / 2.0,
                         cy + (literal_h + text_dim.height) / 2.0 - 2.0,
-                        16.0,
+                        18.0,
                         txt_c,
+                        custom_font.as_ref(),
                     );
+
                     lx += literal_w + spacing;
                 }
                 cx += exact_clause_w + 20.0;
@@ -284,11 +322,10 @@ async fn main() {
             );
         }
 
-        // Cập nhật max_scroll cho Frame sau dựa vào vị trí Y cuối cùng của mệnh đề
         let actual_bottom_y = cy + scroll_y + 50.0;
         max_scroll = (actual_bottom_y - sh).max(0.0);
 
-        // 4. MASKING (VẼ ĐÈ LÊN MỆNH ĐỀ ĐỂ CHE PHẦN UI PHÍA TRÊN)
+        // 4. MASKING
         draw_rectangle(0.0, 0.0, sw, clauses_area_y - 25.0, bg_color);
         draw_line(
             10.0,
@@ -300,9 +337,8 @@ async fn main() {
         );
 
         // ===============================================
-        // 5. VẼ UI BẢNG ĐIỀU KHIỂN & CÔNG TẮC Ở TRÊN CÙNG
+        // 5. VẼ UI BẢNG ĐIỀU KHIỂN & CÔNG TẮC
         // ===============================================
-
         let font_size = if sw < 600.0 { 16.0 } else { 22.0 };
         draw_text(
             &format!(
@@ -361,7 +397,7 @@ async fn main() {
             scroll_y = 0.0;
         }
 
-        // VẼ DÀN CÔNG TẮC (Nhỏ gọn, Wrap tự động)
+        // VẼ DÀN CÔNG TẮC BẰNG KÝ HIỆU
         let mut vx = 10.0;
         let mut vy = vars_area_y;
 
@@ -389,17 +425,18 @@ async fn main() {
                 );
             }
 
-            let text = format!("{}", i);
-            let text_dim = measure_text(&text, None, 18, 1.0);
-            draw_text(
-                &text,
+            // VẼ KÝ HIỆU THAY VÌ CON SỐ
+            let text = VAR_SYMBOLS[i % MAX_N];
+            let text_dim = measure_sym(text, 22.0, custom_font.as_ref());
+            draw_sym(
+                text,
                 vx + (var_size - text_dim.width) / 2.0,
-                vy + (var_size + text_dim.height) / 2.0 - 3.0,
-                18.0,
+                vy + (var_size + text_dim.height) / 2.0 - 4.0,
+                22.0,
                 WHITE,
+                custom_font.as_ref(),
             );
 
-            // Bắt sự kiện Click cho công tắc
             if !game.is_won && is_mouse_button_pressed(MouseButton::Left) {
                 let (mx, my) = mouse_position();
                 if mx >= vx && mx <= vx + var_size && my >= vy && my <= vy + var_size {
