@@ -14,10 +14,9 @@ getrandom::register_custom_getrandom!(macroquad_getrandom);
 // ==========================================
 // TỪ ĐIỂN BIỂU TƯỢNG (SYMBOL DICTIONARY)
 // ==========================================
-const MAX_N: usize = 25; // Chừa sẵn 30 biểu tượng để ông tăng N
+const MAX_N: usize = 16; // Chừa sẵn 30 biểu tượng để ông tăng N
 const VAR_SYMBOLS: [&str; MAX_N] = [
-    "⛾", "⛿", "☯", "☸", "⛩", "⛰", "⛱", "⛴", "⛷", "⛸", "⛹", "♸", "⚥", "☊", "☍", "☓", "☤", "🄰", "🄱",
-    "🆈", "🆉", "⚖", "♇", "♪", "♬",
+    "空", "覺", "心", "理", "性", "靜", "無", "氣", "慧", "悟", "寂", "易", "道", "源", "幻", "靈",
 ];
 
 // Hàm hỗ trợ vẽ Text Custom Font cho Unicode
@@ -117,11 +116,34 @@ impl GameState {
             let actual_sols = Self::count_solutions(n, &clauses);
 
             if actual_sols > 0 && actual_sols <= max_sols {
+                // TẠO MẢNG RANDOM TRẠNG THÁI KHỞI ĐẦU
+                let mut initial_vars = vec![false; n];
+                for i in 0..n {
+                    initial_vars[i] = rng.gen_bool(0.5);
+                }
+
+                // Cần kiểm tra xem xui xui random trúng ngay cái nghiệm luôn không
+                // Nếu trúng nghiệm ngay lúc đầu thì win luôn (dù tỉ lệ cực thấp)
+                let mut initial_win = true;
+                for clause in &clauses {
+                    let mut clause_sat = false;
+                    for &(v_idx, req_sign) in &clause.literals {
+                        if initial_vars[v_idx] == req_sign {
+                            clause_sat = true;
+                            break;
+                        }
+                    }
+                    if !clause_sat {
+                        initial_win = false;
+                        break;
+                    }
+                }
+
                 return Self {
                     n,
-                    vars: vec![false; n],
+                    vars: initial_vars, // <--- ĐÃ ĐỔI THÀNH MẢNG RANDOM
                     clauses,
-                    is_won: false,
+                    is_won: initial_win, // Cập nhật đúng trạng thái Win
                     steps: 0,
                     threshold_pct,
                     actual_sols,
@@ -150,10 +172,21 @@ impl GameState {
     }
 }
 
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "NP-Reactor Symbolic".to_owned(),
+        window_width: 1920,  // Tăng chiều rộng mặc định
+        window_height: 1080, // Tăng chiều cao mặc định
+        high_dpi: true,      // <--- CHÌA KHÓA: Bật High-DPI để hỗ trợ màn hình nét
+        sample_count: 4,     // <--- Khử răng cưa (Anti-aliasing), để 4 hoặc 8 là mượt
+        ..Default::default()
+    }
+}
+
 // ==========================================
 // VÒNG LẶP GAME CHÍNH
 // ==========================================
-#[macroquad::main("NP-Hard Symbolic")]
+#[macroquad::main(window_conf)]
 async fn main() {
     // Tải font Unicode
     let font_bytes = std::fs::read("font.ttf");
