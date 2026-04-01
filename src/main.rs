@@ -1,7 +1,15 @@
-use ::rand::RngExt;
-use ::rand::seq::SliceRandom;
+use ::rand::{Rng, seq::SliceRandom as _};
 use macroquad::prelude::*;
 use std::collections::HashSet;
+
+// Bridge (Cầu nối) để rand 0.9 chạy được trên Macroquad Web
+fn macroquad_getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
+    for byte in buf.iter_mut() {
+        *byte = macroquad::rand::gen_range(0, 255) as u8;
+    }
+    Ok(())
+}
+getrandom::register_custom_getrandom!(macroquad_getrandom);
 
 // ==========================================
 // CẤU TRÚC DỮ LIỆU
@@ -49,7 +57,7 @@ impl GameState {
     }
 
     fn randomerate(n: usize, threshold_pct: f32) -> Self {
-        let mut rng = ::rand::rng();
+        let mut rng = ::rand::thread_rng();
         let m_min = (n as f32 * 4.26) as usize;
         let m_max = (n as f32 * 4.26) as usize;
 
@@ -57,13 +65,13 @@ impl GameState {
         let max_sols = max_sols.max(1);
 
         loop {
-            let m = rng.random_range(m_min..=m_max);
-            let solution: Vec<bool> = (0..n).map(|_| rng.random_bool(0.5)).collect();
+            let m = rng.gen_range(m_min..=m_max);
+            let solution: Vec<bool> = (0..n).map(|_| rng.gen_bool(0.5)).collect();
             let mut clauses = Vec::new();
             let mut seen_clauses = HashSet::new();
 
             while clauses.len() < m {
-                let k = rng.random_range(3..=3.min(n));
+                let k = rng.gen_range(3..=3.min(n));
                 let mut available_vars: Vec<usize> = (0..n).collect();
                 available_vars.shuffle(&mut rng);
                 let chosen_vars = &available_vars[0..k];
@@ -72,7 +80,7 @@ impl GameState {
                 let mut is_sat = false;
 
                 for &v in chosen_vars {
-                    let sign = rng.random_bool(0.5);
+                    let sign = rng.gen_bool(0.5);
                     literals.push((v, sign));
                     if solution[v] == sign {
                         is_sat = true;
@@ -80,7 +88,7 @@ impl GameState {
                 }
 
                 if !is_sat {
-                    let lucky = rng.random_range(0..k);
+                    let lucky = rng.gen_range(0..k);
                     literals[lucky].1 = !literals[lucky].1;
                 }
 
