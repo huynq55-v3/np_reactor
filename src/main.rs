@@ -235,7 +235,7 @@ async fn main() {
             };
             draw_rectangle(vx, vy, var_w, var_h, color);
 
-            let text = format!("V{}", i);
+            let text = format!("{}", i);
             let text_dim = measure_text(&text, None, 20, 1.0);
             draw_text(
                 &text,
