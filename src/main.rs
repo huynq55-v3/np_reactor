@@ -17,23 +17,19 @@ struct GameState {
     clauses: Vec<Clause>,
     is_won: bool,
     steps: u32,
-    threshold_pct: f32, // Ngưỡng % nghiệm cho phép
-    actual_sols: usize, // Số lượng nghiệm thực tế của ván này!
+    threshold_pct: f32,
+    actual_sols: usize,
 }
 
 impl GameState {
-    // Thuật toán Vét cạn (Brute-force) siêu tốc bằng Bitwise
     fn count_solutions(n: usize, clauses: &Vec<Clause>) -> usize {
         let max_mask = 1_usize << n;
         let mut count = 0;
-
-        // Duyệt toàn bộ 2^N trường hợp
         for mask in 0..max_mask {
             let mut all_sat = true;
             for clause in clauses {
                 let mut clause_sat = false;
                 for &(v_idx, required_sign) in &clause.literals {
-                    // Trích xuất bit thứ v_idx ra xem là 0 (False) hay 1 (True)
                     let bit_val = (mask >> v_idx) & 1 == 1;
                     if bit_val == required_sign {
                         clause_sat = true;
@@ -57,9 +53,8 @@ impl GameState {
         let m_min = (n as f32 * 4.26) as usize;
         let m_max = (n as f32 * 4.26) as usize;
 
-        // Tính ra con số nghiệm tối đa cho phép
         let max_sols = ((1_usize << n) as f32 * (threshold_pct / 100.0)) as usize;
-        let max_sols = max_sols.max(1); // Ít nhất phải cho phép 1 nghiệm
+        let max_sols = max_sols.max(1);
 
         loop {
             let m = rng.random_range(m_min..=m_max);
@@ -67,10 +62,8 @@ impl GameState {
             let mut clauses = Vec::new();
             let mut seen_clauses = HashSet::new();
 
-            // 1. SINH ĐỀ TỰ NHIÊN (Không gò ép siết độ khó nữa)
             while clauses.len() < m {
                 let k = rng.random_range(3..=3.min(n));
-
                 let mut available_vars: Vec<usize> = (0..n).collect();
                 available_vars.shuffle(&mut rng);
                 let chosen_vars = &available_vars[0..k];
@@ -86,7 +79,6 @@ impl GameState {
                     }
                 }
 
-                // Cứu nếu sai bét
                 if !is_sat {
                     let lucky = rng.random_range(0..k);
                     literals[lucky].1 = !literals[lucky].1;
@@ -99,10 +91,8 @@ impl GameState {
                 }
             }
 
-            // 2. CHO BOT VÉT CẠN KIỂM TRA SỐ NGHIỆM
             let actual_sols = Self::count_solutions(n, &clauses);
 
-            // 3. ĐẠT NGƯỠNG THÌ XUẤT XƯỞNG!
             if actual_sols <= max_sols {
                 return Self {
                     n,
@@ -114,7 +104,6 @@ impl GameState {
                     actual_sols,
                 };
             }
-            // Không đạt thì vòng lặp Loop tự động quay lại vứt rác sinh đề mới.
         }
     }
 
@@ -138,58 +127,64 @@ impl GameState {
 }
 
 // ==========================================
-// VÒNG LẶP GAME CHÍNH
+// VÒNG LẶP GAME CHÍNH (ĐÃ LÀM RESPONSIVE)
 // ==========================================
 #[macroquad::main("NP-Hard")]
 async fn main() {
-    let mut current_n = 8;
-    let mut current_threshold = 1.0; // Khởi đầu: Lọc ra game có số nghiệm <= 1.0% không gian
+    let mut current_n = 4;
+    let mut current_threshold = 1.0;
     let mut game = GameState::randomerate(current_n, current_threshold);
 
     loop {
         clear_background(Color::new(0.1, 0.1, 0.12, 1.0));
-
         let sw = screen_width();
 
-        // ------------------------------------------------
-        // 1. UI ĐIỀU KHIỂN & CHỈ SỐ VÉT CẠN
-        // ------------------------------------------------
-        // In ra thông số gây cấn: Số nghiệm thực tế!
+        // 1. Text thông tin tự co dãn font size
+        let font_size = if sw < 600.0 { 16.0 } else { 22.0 };
         let info_text = format!(
-            "N={} | Steps: {} | Threshold: {:.1}% | Number of solutions: {}",
+            "N={} | Steps: {} | Thresh: {:.1}% | Sols: {}",
             current_n, game.steps, current_threshold, game.actual_sols
         );
-        draw_text(&info_text, 20.0, 40.0, 25.0, YELLOW);
+        draw_text(&info_text, 10.0, 30.0, font_size, YELLOW);
 
-        let btn_w = 120.0;
+        // 2. Dàn Nút bấm tự động Rớt Dòng (Wrap) nếu màn hình hẹp
+        let mut bx = 10.0;
+        let mut by = 50.0;
+        // Nếu màn hẹp, mỗi nút chiếm gần nửa màn hình. Nếu rộng, giữ nút 120px.
+        let btn_w = if sw < 400.0 { (sw - 30.0) / 2.0 } else { 120.0 };
         let btn_h = 35.0;
         let gap = 10.0;
-        let mut bx = sw - btn_w - 20.0;
-        let by = 15.0;
 
-        // Nút: Tăng N
-        draw_rectangle(bx, by, btn_w, btn_h, Color::new(0.2, 0.6, 0.2, 1.0));
-        draw_text("N + 1", bx + 30.0, by + 25.0, 25.0, WHITE);
-        let btn_n_plus = (bx, by, btn_w, btn_h);
+        // Hàm closure nội bộ để vẽ nút và tính tọa độ động
+        let mut draw_btn = |text: &str, color: Color| -> (f32, f32, f32, f32) {
+            // Kiểm tra xem nút có bị tràn màn hình không, nếu có thì rớt dòng
+            if bx + btn_w > sw - 10.0 {
+                bx = 10.0;
+                by += btn_h + gap;
+            }
+            let rect = (bx, by, btn_w, btn_h);
+            draw_rectangle(bx, by, btn_w, btn_h, color);
 
-        bx -= btn_w + gap;
-        // Nút: Đổi Đề Mới
-        draw_rectangle(bx, by, btn_w, btn_h, Color::new(0.8, 0.6, 0.1, 1.0));
-        draw_text("New Problem", bx + 25.0, by + 25.0, 25.0, WHITE);
-        let btn_new_game = (bx, by, btn_w, btn_h);
+            // Căn giữa text trong nút
+            let text_dim = measure_text(text, None, 18, 1.0);
+            draw_text(
+                text,
+                bx + (btn_w - text_dim.width) / 2.0,
+                by + (btn_h + text_dim.height) / 2.0 - 3.0,
+                18.0,
+                WHITE,
+            );
 
-        bx -= btn_w + gap;
-        // Nút: Tăng ngưỡng (Dễ hơn)
-        draw_rectangle(bx, by, btn_w, btn_h, Color::new(0.2, 0.4, 0.6, 1.0));
-        draw_text("Threshold (+)", bx + 5.0, by + 25.0, 20.0, WHITE);
-        let btn_thresh_plus = (bx, by, btn_w, btn_h);
+            bx += btn_w + gap;
+            rect
+        };
 
-        bx -= btn_w + gap;
-        // Nút: Giảm ngưỡng (Khó hơn)
-        draw_rectangle(bx, by, btn_w, btn_h, Color::new(0.6, 0.2, 0.2, 1.0));
-        draw_text("Threshold (-)", bx + 5.0, by + 25.0, 20.0, WHITE);
-        let btn_thresh_minus = (bx, by, btn_w, btn_h);
+        let btn_n_plus = draw_btn("N + 1", Color::new(0.2, 0.6, 0.2, 1.0));
+        let btn_new_game = draw_btn("New Game", Color::new(0.8, 0.6, 0.1, 1.0));
+        let btn_thresh_plus = draw_btn("Thresh (+)", Color::new(0.2, 0.4, 0.6, 1.0));
+        let btn_thresh_minus = draw_btn("Thresh (-)", Color::new(0.6, 0.2, 0.2, 1.0));
 
+        // Xử lý Click (Hỗ trợ cả chuột và cảm ứng điện thoại)
         if is_mouse_button_pressed(MouseButton::Left) {
             let (mx, my) = mouse_position();
             let is_clicked = |rect: (f32, f32, f32, f32)| -> bool {
@@ -202,29 +197,27 @@ async fn main() {
             } else if is_clicked(btn_new_game) {
                 game = GameState::randomerate(current_n, current_threshold);
             } else if is_clicked(btn_thresh_plus) {
-                current_threshold += 0.5; // Tăng ngưỡng thêm 0.5% (Dễ đi)
+                current_threshold += 0.5;
                 game = GameState::randomerate(current_n, current_threshold);
             } else if is_clicked(btn_thresh_minus) && current_threshold > 0.1 {
-                current_threshold = (current_threshold - 0.5).max(0.1); // Giảm ngưỡng (Khó lên), tối thiểu 0.1%
+                current_threshold = (current_threshold - 0.5).max(0.1);
                 game = GameState::randomerate(current_n, current_threshold);
             }
         }
 
-        // ------------------------------------------------
-        // 2. VẼ DÀN CÔNG TẮC
-        // ------------------------------------------------
-        let vars_area_y = 80.0;
+        // 3. VẼ DÀN CÔNG TẮC (Đẩy y xuống dựa trên số dòng nút đã vẽ)
+        let vars_area_y = by + btn_h + 20.0;
         let cols = (current_n as f32).sqrt().ceil() as usize;
         let rows = (current_n as f32 / cols as f32).ceil() as usize;
 
         let padding = 10.0;
-        let var_w = ((sw - 40.0) / cols as f32) - padding;
-        let var_h = 50.0;
+        let var_w = ((sw - 20.0) / cols as f32) - padding; // Tràn sát viền
+        let var_h = 45.0;
 
         for i in 0..game.n {
             let c = i % cols;
             let r = i / cols;
-            let vx = 20.0 + c as f32 * (var_w + padding);
+            let vx = 10.0 + c as f32 * (var_w + padding);
             let vy = vars_area_y + r as f32 * (var_h + padding);
 
             let color = if game.vars[i] {
@@ -235,12 +228,12 @@ async fn main() {
             draw_rectangle(vx, vy, var_w, var_h, color);
 
             let text = format!("V{}", i);
-            let text_dim = measure_text(&text, None, 25, 1.0);
+            let text_dim = measure_text(&text, None, 20, 1.0);
             draw_text(
                 &text,
                 vx + (var_w - text_dim.width) / 2.0,
                 vy + (var_h + text_dim.height) / 2.0 - 5.0,
-                25.0,
+                20.0,
                 WHITE,
             );
 
@@ -254,32 +247,30 @@ async fn main() {
             }
         }
 
-        // ------------------------------------------------
-        // 3. VẼ CÁC MỆNH ĐỀ CHƯA ĐƯỢC THỎA MÃN
-        // ------------------------------------------------
-        let clauses_area_y = vars_area_y + (rows as f32 * (var_h + padding)) + 40.0;
+        // 4. VẼ CÁC MỆNH ĐỀ CHƯA THỎA MÃN
+        let clauses_area_y = vars_area_y + (rows as f32 * (var_h + padding)) + 30.0;
         draw_line(
-            20.0,
-            clauses_area_y - 20.0,
-            sw - 20.0,
-            clauses_area_y - 20.0,
+            10.0,
+            clauses_area_y - 15.0,
+            sw - 10.0,
+            clauses_area_y - 15.0,
             2.0,
             GRAY,
         );
 
         if game.is_won {
             let win_text = "YOU WIN!";
-            let text_dim = measure_text(win_text, None, 50, 1.0);
+            let text_dim = measure_text(win_text, None, 40, 1.0);
             draw_text(
                 win_text,
                 (sw - text_dim.width) / 2.0,
-                clauses_area_y + 100.0,
-                50.0,
+                clauses_area_y + 80.0,
+                40.0,
                 GOLD,
             );
         } else {
             let mut unsat_count = 0;
-            let mut cx = 20.0;
+            let mut cx = 10.0;
             let mut cy = clauses_area_y;
 
             for clause in &game.clauses {
@@ -293,14 +284,15 @@ async fn main() {
 
                 if !clause_sat {
                     unsat_count += 1;
-                    let literal_w = 40.0;
-                    let literal_h = 30.0;
-                    let spacing = 5.0;
+                    // Ô vuông mệnh đề nhỏ lại 1 chút cho vừa mobile
+                    let literal_w = 35.0;
+                    let literal_h = 25.0;
+                    let spacing = 4.0;
                     let clause_w = (literal_w + spacing) * clause.literals.len() as f32;
 
-                    if cx + clause_w > sw - 20.0 {
-                        cx = 20.0;
-                        cy += literal_h + 20.0;
+                    if cx + clause_w > sw - 10.0 {
+                        cx = 10.0;
+                        cy += literal_h + 15.0;
                     }
 
                     let mut lx = cx;
@@ -314,24 +306,24 @@ async fn main() {
                         draw_rectangle_lines(lx, cy, literal_w, literal_h, 1.0, WHITE);
 
                         let text = format!("V{}", v_idx);
-                        let text_dim = measure_text(&text, None, 20, 1.0);
+                        let text_dim = measure_text(&text, None, 16, 1.0);
                         draw_text(
                             &text,
                             lx + (literal_w - text_dim.width) / 2.0,
-                            cy + (literal_h + text_dim.height) / 2.0 - 3.0,
-                            20.0,
+                            cy + (literal_h + text_dim.height) / 2.0 - 2.0,
+                            16.0,
                             WHITE,
                         );
                         lx += literal_w + spacing;
                     }
-                    cx += clause_w + 20.0;
+                    cx += clause_w + 15.0;
                 }
             }
             draw_text(
                 &format!("{} clauses remain...", unsat_count),
-                20.0,
+                10.0,
                 clauses_area_y - 5.0,
-                20.0,
+                16.0,
                 ORANGE,
             );
         }

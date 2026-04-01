@@ -1,0 +1,39 @@
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>NP-Hard Reactor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            /* Chặn cuộn trang trên đt */
+            background: #19191e;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="glcanvas" tabindex='1'></canvas>
+
+    <!-- Script core của Macroquad để giao tiếp giữa WASM và Trình duyệt -->
+    <script src="https://not-fl3.github.io/miniquad-samples/mq_js_bundle.js"></script>
+
+    <script>
+        // Sửa tên file .wasm này cho đúng với tên project cargo của ông nhé
+        load("np_reactor.wasm"); 
+    </script>
+</body>
+
+</html>
