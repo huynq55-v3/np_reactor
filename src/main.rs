@@ -59,40 +59,27 @@ impl GameState {
 
     fn randomerate(n: usize, threshold_pct: f32) -> Self {
         let mut rng = ::rand::thread_rng();
-        let m_min = (n as f32 * 4.26) as usize;
-        let m_max = (n as f32 * 4.26) as usize;
+        let m = (n as f32 * 4.26) as usize; // Chốt cứng tỉ lệ 4.26 (Ngưỡng khó nhất)
 
         let max_sols = ((1_usize << n) as f32 * (threshold_pct / 100.0)) as usize;
         let max_sols = max_sols.max(1);
 
         loop {
-            let m = rng.gen_range(m_min..=m_max);
-            let solution: Vec<bool> = (0..n).map(|_| rng.gen_bool(0.5)).collect();
             let mut clauses = Vec::new();
             let mut seen_clauses = HashSet::new();
 
+            // 1. TẠO MỆNH ĐỀ HOÀN TOÀN NGẪU NHIÊN (Không gieo nghiệm!)
             while clauses.len() < m {
                 let k = rng.gen_range(3..=3.min(n));
                 let mut available_vars: Vec<usize> = (0..n).collect();
                 available_vars.shuffle(&mut rng);
-                let chosen_vars = &available_vars[0..k];
 
                 let mut literals = Vec::new();
-                let mut is_sat = false;
-
-                for &v in chosen_vars {
+                for i in 0..k {
+                    let v = available_vars[i];
                     let sign = rng.gen_bool(0.5);
                     literals.push((v, sign));
-                    if solution[v] == sign {
-                        is_sat = true;
-                    }
                 }
-
-                if !is_sat {
-                    let lucky = rng.gen_range(0..k);
-                    literals[lucky].1 = !literals[lucky].1;
-                }
-
                 literals.sort_by_key(|&(v_idx, _)| v_idx);
 
                 if seen_clauses.insert(literals.clone()) {
@@ -100,9 +87,11 @@ impl GameState {
                 }
             }
 
+            // 2. SAU ĐÓ MỚI ĐẾM NGHIỆM
             let actual_sols = Self::count_solutions(n, &clauses);
 
-            if actual_sols <= max_sols {
+            // 3. CHỈ LẤY NHỮNG VÁN CÓ NGHIỆM (Và số nghiệm <= max_sols)
+            if actual_sols > 0 && actual_sols <= max_sols {
                 return Self {
                     n,
                     vars: vec![false; n],
@@ -111,7 +100,7 @@ impl GameState {
                     steps: 0,
                     threshold_pct,
                     actual_sols,
-                    last_flipped: None, // <-- Khởi tạo trống
+                    last_flipped: None,
                 };
             }
         }
