@@ -27,7 +27,7 @@ struct GameState {
     steps: u32,
     threshold_pct: f32,
     actual_sols: usize,
-    last_flipped: Option<usize>, // <-- THÊM: Ghi nhớ con vừa lật
+    last_flipped: Option<usize>,
 }
 
 impl GameState {
@@ -59,7 +59,7 @@ impl GameState {
 
     fn randomerate(n: usize, threshold_pct: f32) -> Self {
         let mut rng = ::rand::thread_rng();
-        let m = (n as f32 * 4.26) as usize; // Chốt cứng tỉ lệ 4.26 (Ngưỡng khó nhất)
+        let m = (n as f32 * 4.26) as usize;
 
         let max_sols = ((1_usize << n) as f32 * (threshold_pct / 100.0)) as usize;
         let max_sols = max_sols.max(1);
@@ -68,7 +68,6 @@ impl GameState {
             let mut clauses = Vec::new();
             let mut seen_clauses = HashSet::new();
 
-            // 1. TẠO MỆNH ĐỀ HOÀN TOÀN NGẪU NHIÊN (Không gieo nghiệm!)
             while clauses.len() < m {
                 let k = rng.gen_range(3..=3.min(n));
                 let mut available_vars: Vec<usize> = (0..n).collect();
@@ -87,10 +86,8 @@ impl GameState {
                 }
             }
 
-            // 2. SAU ĐÓ MỚI ĐẾM NGHIỆM
             let actual_sols = Self::count_solutions(n, &clauses);
 
-            // 3. CHỈ LẤY NHỮNG VÁN CÓ NGHIỆM (Và số nghiệm <= max_sols)
             if actual_sols > 0 && actual_sols <= max_sols {
                 return Self {
                     n,
@@ -134,141 +131,72 @@ async fn main() {
     let mut current_threshold = 1.0;
     let mut game = GameState::randomerate(current_n, current_threshold);
 
+    let mut scroll_y: f32 = 0.0;
+    let mut max_scroll: f32 = 0.0;
+
     loop {
-        clear_background(Color::new(0.1, 0.1, 0.12, 1.0));
         let sw = screen_width();
+        let sh = screen_height();
 
-        let font_size = if sw < 600.0 { 16.0 } else { 22.0 };
-        let info_text = format!(
-            "N={} | Steps: {} | Thresh: {:.1}% | Sols: {}",
-            current_n, game.steps, current_threshold, game.actual_sols
-        );
-        draw_text(&info_text, 10.0, 30.0, font_size, YELLOW);
-
-        let mut bx = 10.0;
-        let mut by = 50.0;
+        // 1. TÍNH TOÁN TRƯỚC VỊ TRÍ LAYOUT (Để biết chừa bao nhiêu không gian cho UI ở trên)
         let btn_w = if sw < 400.0 { (sw - 30.0) / 2.0 } else { 120.0 };
         let btn_h = 35.0;
         let gap = 10.0;
 
-        let mut draw_btn = |text: &str, color: Color| -> (f32, f32, f32, f32) {
-            if bx + btn_w > sw - 10.0 {
-                bx = 10.0;
-                by += btn_h + gap;
+        // Mô phỏng vị trí 4 nút Control để tìm y của dàn công tắc
+        let mut temp_bx = 10.0;
+        let mut temp_by = 50.0;
+        for _ in 0..4 {
+            if temp_bx + btn_w > sw - 10.0 {
+                temp_bx = 10.0;
+                temp_by += btn_h + gap;
             }
-            let rect = (bx, by, btn_w, btn_h);
-            draw_rectangle(bx, by, btn_w, btn_h, color);
-
-            let text_dim = measure_text(text, None, 18, 1.0);
-            draw_text(
-                text,
-                bx + (btn_w - text_dim.width) / 2.0,
-                by + (btn_h + text_dim.height) / 2.0 - 3.0,
-                18.0,
-                WHITE,
-            );
-            bx += btn_w + gap;
-            rect
-        };
-
-        let btn_n_plus = draw_btn("N + 1", Color::new(0.2, 0.6, 0.2, 1.0));
-        let btn_new_game = draw_btn("New Game", Color::new(0.8, 0.6, 0.1, 1.0));
-        let btn_thresh_plus = draw_btn("Thresh (+)", Color::new(0.2, 0.4, 0.6, 1.0));
-        let btn_thresh_minus = draw_btn("Thresh (-)", Color::new(0.6, 0.2, 0.2, 1.0));
-
-        if is_mouse_button_pressed(MouseButton::Left) {
-            let (mx, my) = mouse_position();
-            let is_clicked = |rect: (f32, f32, f32, f32)| -> bool {
-                mx >= rect.0 && mx <= rect.0 + rect.2 && my >= rect.1 && my <= rect.1 + rect.3
-            };
-
-            if is_clicked(btn_n_plus) {
-                current_n += 1;
-                game = GameState::randomerate(current_n, current_threshold);
-            } else if is_clicked(btn_new_game) {
-                game = GameState::randomerate(current_n, current_threshold);
-            } else if is_clicked(btn_thresh_plus) {
-                current_threshold += 0.5;
-                game = GameState::randomerate(current_n, current_threshold);
-            } else if is_clicked(btn_thresh_minus) && current_threshold > 0.1 {
-                current_threshold = (current_threshold - 0.5).max(0.1);
-                game = GameState::randomerate(current_n, current_threshold);
-            }
+            temp_bx += btn_w + gap;
         }
+        let vars_area_y = temp_by + btn_h + 20.0;
 
-        // 3. VẼ DÀN CÔNG TẮC
-        let vars_area_y = by + btn_h + 20.0;
-        let cols = (current_n as f32).sqrt().ceil() as usize;
-        let rows = (current_n as f32 / cols as f32).ceil() as usize;
-        let padding = 10.0;
-        let var_w = ((sw - 20.0) / cols as f32) - padding;
-        let var_h = 45.0;
-
-        for i in 0..game.n {
-            let c = i % cols;
-            let r = i / cols;
-            let vx = 10.0 + c as f32 * (var_w + padding);
-            let vy = vars_area_y + r as f32 * (var_h + padding);
-
-            let color = if game.vars[i] {
-                Color::new(0.1, 0.6, 0.1, 1.0)
-            } else {
-                Color::new(0.6, 0.1, 0.1, 1.0)
-            };
-            draw_rectangle(vx, vy, var_w, var_h, color);
-
-            // // ---> THÊM: Vẽ viền sáng (Cyan) nếu đây là công tắc vừa lật <---
-            // if game.last_flipped == Some(i) {
-            //     draw_rectangle_lines(vx - 2.0, vy - 2.0, var_w + 4.0, var_h + 4.0, 4.0, SKYBLUE);
-            // }
-
-            let text = format!("{}", i);
-            let text_dim = measure_text(&text, None, 20, 1.0);
-            draw_text(
-                &text,
-                vx + (var_w - text_dim.width) / 2.0,
-                vy + (var_h + text_dim.height) / 2.0 - 5.0,
-                20.0,
-                WHITE,
-            );
-
-            if !game.is_won && is_mouse_button_pressed(MouseButton::Left) {
-                let (mx, my) = mouse_position();
-                if mx >= vx && mx <= vx + var_w && my >= vy && my <= vy + var_h {
-                    game.vars[i] = !game.vars[i];
-                    game.steps += 1;
-                    game.last_flipped = Some(i); // <-- THÊM: Cập nhật con vừa lật
-                    game.check_win_condition();
-                }
+        // Mô phỏng vị trí Công tắc (ĐÃ LÀM NHỎ LẠI TỪ 45 -> 35)
+        let var_size = 35.0;
+        let var_gap = 10.0;
+        let mut temp_vx = 10.0;
+        let mut temp_vy = vars_area_y;
+        for _ in 0..game.n {
+            if temp_vx + var_size > sw - 10.0 {
+                temp_vx = 10.0;
+                temp_vy += var_size + var_gap;
             }
+            temp_vx += var_size + var_gap;
         }
+        let clauses_area_y = temp_vy + var_size + 30.0;
 
-        // 4. VẼ TOÀN BỘ CÁC MỆNH ĐỀ THEO CỤM
-        let clauses_area_y = vars_area_y + (rows as f32 * (var_h + padding)) + 30.0;
-        draw_line(
-            10.0,
-            clauses_area_y - 15.0,
-            sw - 10.0,
-            clauses_area_y - 15.0,
-            2.0,
-            GRAY,
-        );
+        // 2. XỬ LÝ SCROLL TRƯỚC KHI VẼ
+        let (_, mouse_wheel_y) = mouse_wheel();
+        scroll_y -= mouse_wheel_y * 20.0; // Cuộn bằng lăn chuột
+
+        if is_key_down(KeyCode::Up) {
+            scroll_y -= 10.0;
+        } // Cuộn bằng phím lên
+        if is_key_down(KeyCode::Down) {
+            scroll_y += 10.0;
+        } // Cuộn bằng phím xuống
+
+        // Giới hạn cuộn
+        scroll_y = scroll_y.clamp(0.0, max_scroll);
+
+        // 3. XÓA NỀN & VẼ CÁC MỆNH ĐỀ (CUỘN ĐƯỢC)
+        let bg_color = Color::new(0.1, 0.1, 0.12, 1.0);
+        clear_background(bg_color);
+
+        let mut cx = 15.0;
+        let mut cy = clauses_area_y - scroll_y; // <--- TRỪ ĐI SCROLL_Y Ở ĐÂY
 
         if game.is_won {
             let win_text = "YOU WIN!";
             let text_dim = measure_text(win_text, None, 40, 1.0);
-            draw_text(
-                win_text,
-                (sw - text_dim.width) / 2.0,
-                clauses_area_y + 80.0,
-                40.0,
-                GOLD,
-            );
+            draw_text(win_text, (sw - text_dim.width) / 2.0, cy + 80.0, 40.0, GOLD);
+            cy += 150.0; // Nới rộng max_scroll
         } else {
             let mut unsat_count = 0;
-            let mut cx = 15.0;
-            let mut cy = clauses_area_y;
-
             for clause in &game.clauses {
                 let mut clause_sat = false;
                 for &(v_idx, required_sign) in &clause.literals {
@@ -277,7 +205,6 @@ async fn main() {
                         break;
                     }
                 }
-
                 if !clause_sat {
                     unsat_count += 1;
                 }
@@ -316,33 +243,23 @@ async fn main() {
 
                 let mut lx = cx;
                 for &(v_idx, required_sign) in &clause.literals {
-                    let mut bg_color = if !required_sign {
+                    let mut bg_c = if !required_sign {
                         Color::new(0.6, 0.1, 0.1, 1.0)
                     } else {
                         Color::new(0.1, 0.5, 0.1, 1.0)
                     };
-
-                    let mut text_color = WHITE;
+                    let mut txt_c = WHITE;
                     if clause_sat {
-                        bg_color.a = 0.4;
-                        text_color = Color::new(0.7, 0.7, 0.7, 1.0);
+                        bg_c.a = 0.4;
+                        txt_c = Color::new(0.7, 0.7, 0.7, 1.0);
                     }
 
-                    draw_rectangle(lx, cy, literal_w, literal_h, bg_color);
+                    draw_rectangle(lx, cy, literal_w, literal_h, bg_c);
 
-                    // // ---> THÊM: Vẽ viền sáng (Cyan) cho con vừa lật ngay bên trong Mệnh đề <---
-                    // if game.last_flipped == Some(v_idx) {
-                    //     draw_rectangle_lines(lx, cy, literal_w, literal_h, 2.0, SKYBLUE);
-                    // } else {
-                    //     draw_rectangle_lines(
-                    //         lx,
-                    //         cy,
-                    //         literal_w,
-                    //         literal_h,
-                    //         1.0,
-                    //         Color::new(0.2, 0.2, 0.2, 0.5),
-                    //     );
-                    // }
+                    // Vẽ viền sáng cho con vừa lật (Tùy chọn)
+                    if game.last_flipped == Some(v_idx) {
+                        draw_rectangle_lines(lx, cy, literal_w, literal_h, 2.0, SKYBLUE);
+                    }
 
                     let text = format!("{}", v_idx);
                     let text_dim = measure_text(&text, None, 16, 1.0);
@@ -351,7 +268,7 @@ async fn main() {
                         lx + (literal_w - text_dim.width) / 2.0,
                         cy + (literal_h + text_dim.height) / 2.0 - 2.0,
                         16.0,
-                        text_color,
+                        txt_c,
                     );
                     lx += literal_w + spacing;
                 }
@@ -359,12 +276,140 @@ async fn main() {
             }
 
             draw_text(
-                &format!("{} clauses remain...", unsat_count),
+                &format!("{} clauses remain... (Scroll to view)", unsat_count),
                 10.0,
-                clauses_area_y - 5.0,
+                clauses_area_y - scroll_y - 5.0,
                 16.0,
                 ORANGE,
             );
+        }
+
+        // Cập nhật max_scroll cho Frame sau dựa vào vị trí Y cuối cùng của mệnh đề
+        let actual_bottom_y = cy + scroll_y + 50.0;
+        max_scroll = (actual_bottom_y - sh).max(0.0);
+
+        // 4. MASKING (VẼ ĐÈ LÊN MỆNH ĐỀ ĐỂ CHE PHẦN UI PHÍA TRÊN)
+        draw_rectangle(0.0, 0.0, sw, clauses_area_y - 25.0, bg_color);
+        draw_line(
+            10.0,
+            clauses_area_y - 25.0,
+            sw - 10.0,
+            clauses_area_y - 25.0,
+            2.0,
+            GRAY,
+        );
+
+        // ===============================================
+        // 5. VẼ UI BẢNG ĐIỀU KHIỂN & CÔNG TẮC Ở TRÊN CÙNG
+        // ===============================================
+
+        let font_size = if sw < 600.0 { 16.0 } else { 22.0 };
+        draw_text(
+            &format!(
+                "N={} | Steps: {} | Thresh: {:.1}% | Sols: {}",
+                current_n, game.steps, current_threshold, game.actual_sols
+            ),
+            10.0,
+            30.0,
+            font_size,
+            YELLOW,
+        );
+
+        let mut bx = 10.0;
+        let mut by = 50.0;
+
+        let mut draw_btn = |text: &str, color: Color| -> bool {
+            if bx + btn_w > sw - 10.0 {
+                bx = 10.0;
+                by += btn_h + gap;
+            }
+            let rect = (bx, by, btn_w, btn_h);
+            draw_rectangle(bx, by, btn_w, btn_h, color);
+            let text_dim = measure_text(text, None, 18, 1.0);
+            draw_text(
+                text,
+                bx + (btn_w - text_dim.width) / 2.0,
+                by + (btn_h + text_dim.height) / 2.0 - 3.0,
+                18.0,
+                WHITE,
+            );
+            bx += btn_w + gap;
+
+            is_mouse_button_pressed(MouseButton::Left) && {
+                let (mx, my) = mouse_position();
+                mx >= rect.0 && mx <= rect.0 + rect.2 && my >= rect.1 && my <= rect.1 + rect.3
+            }
+        };
+
+        if draw_btn("N + 1", Color::new(0.2, 0.6, 0.2, 1.0)) {
+            current_n += 1;
+            game = GameState::randomerate(current_n, current_threshold);
+            scroll_y = 0.0;
+        }
+        if draw_btn("New Game", Color::new(0.8, 0.6, 0.1, 1.0)) {
+            game = GameState::randomerate(current_n, current_threshold);
+            scroll_y = 0.0;
+        }
+        if draw_btn("Thresh (+)", Color::new(0.2, 0.4, 0.6, 1.0)) {
+            current_threshold += 0.5;
+            game = GameState::randomerate(current_n, current_threshold);
+            scroll_y = 0.0;
+        }
+        if draw_btn("Thresh (-)", Color::new(0.6, 0.2, 0.2, 1.0)) {
+            current_threshold = (current_threshold - 0.5).max(0.1);
+            game = GameState::randomerate(current_n, current_threshold);
+            scroll_y = 0.0;
+        }
+
+        // VẼ DÀN CÔNG TẮC (Nhỏ gọn, Wrap tự động)
+        let mut vx = 10.0;
+        let mut vy = vars_area_y;
+
+        for i in 0..game.n {
+            if vx + var_size > sw - 10.0 {
+                vx = 10.0;
+                vy += var_size + var_gap;
+            }
+
+            let color = if game.vars[i] {
+                Color::new(0.1, 0.6, 0.1, 1.0)
+            } else {
+                Color::new(0.6, 0.1, 0.1, 1.0)
+            };
+            draw_rectangle(vx, vy, var_size, var_size, color);
+
+            if game.last_flipped == Some(i) {
+                draw_rectangle_lines(
+                    vx - 2.0,
+                    vy - 2.0,
+                    var_size + 4.0,
+                    var_size + 4.0,
+                    3.0,
+                    SKYBLUE,
+                );
+            }
+
+            let text = format!("{}", i);
+            let text_dim = measure_text(&text, None, 18, 1.0);
+            draw_text(
+                &text,
+                vx + (var_size - text_dim.width) / 2.0,
+                vy + (var_size + text_dim.height) / 2.0 - 3.0,
+                18.0,
+                WHITE,
+            );
+
+            // Bắt sự kiện Click cho công tắc
+            if !game.is_won && is_mouse_button_pressed(MouseButton::Left) {
+                let (mx, my) = mouse_position();
+                if mx >= vx && mx <= vx + var_size && my >= vy && my <= vy + var_size {
+                    game.vars[i] = !game.vars[i];
+                    game.steps += 1;
+                    game.last_flipped = Some(i);
+                    game.check_win_condition();
+                }
+            }
+            vx += var_size + var_gap;
         }
 
         next_frame().await
