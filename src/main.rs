@@ -126,7 +126,7 @@ async fn main() {
         let btn_y = 15.0;
 
         draw_rectangle(btn_x, btn_y, btn_w, btn_h, DARKGRAY);
-        draw_text("Increase N (+1)", btn_x + 15.0, btn_y + 25.0, 25.0, GREEN);
+        draw_text("Increase N", btn_x + 15.0, btn_y + 25.0, 25.0, GREEN);
 
         draw_rectangle(btn_x - btn_w - 10.0, btn_y, btn_w, btn_h, DARKGRAY);
         draw_text(
