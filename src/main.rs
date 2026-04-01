@@ -130,7 +130,7 @@ impl GameState {
 // ==========================================
 #[macroquad::main("NP-Hard")]
 async fn main() {
-    let mut current_n = 5;
+    let mut current_n = 4;
     let mut current_threshold = 1.0;
     let mut game = GameState::randomerate(current_n, current_threshold);
 
@@ -217,10 +217,10 @@ async fn main() {
             };
             draw_rectangle(vx, vy, var_w, var_h, color);
 
-            // ---> THÊM: Vẽ viền sáng (Cyan) nếu đây là công tắc vừa lật <---
-            if game.last_flipped == Some(i) {
-                draw_rectangle_lines(vx - 2.0, vy - 2.0, var_w + 4.0, var_h + 4.0, 4.0, SKYBLUE);
-            }
+            // // ---> THÊM: Vẽ viền sáng (Cyan) nếu đây là công tắc vừa lật <---
+            // if game.last_flipped == Some(i) {
+            //     draw_rectangle_lines(vx - 2.0, vy - 2.0, var_w + 4.0, var_h + 4.0, 4.0, SKYBLUE);
+            // }
 
             let text = format!("{}", i);
             let text_dim = measure_text(&text, None, 20, 1.0);
@@ -330,19 +330,19 @@ async fn main() {
 
                     draw_rectangle(lx, cy, literal_w, literal_h, bg_color);
 
-                    // ---> THÊM: Vẽ viền sáng (Cyan) cho con vừa lật ngay bên trong Mệnh đề <---
-                    if game.last_flipped == Some(v_idx) {
-                        draw_rectangle_lines(lx, cy, literal_w, literal_h, 2.0, SKYBLUE);
-                    } else {
-                        draw_rectangle_lines(
-                            lx,
-                            cy,
-                            literal_w,
-                            literal_h,
-                            1.0,
-                            Color::new(0.2, 0.2, 0.2, 0.5),
-                        );
-                    }
+                    // // ---> THÊM: Vẽ viền sáng (Cyan) cho con vừa lật ngay bên trong Mệnh đề <---
+                    // if game.last_flipped == Some(v_idx) {
+                    //     draw_rectangle_lines(lx, cy, literal_w, literal_h, 2.0, SKYBLUE);
+                    // } else {
+                    //     draw_rectangle_lines(
+                    //         lx,
+                    //         cy,
+                    //         literal_w,
+                    //         literal_h,
+                    //         1.0,
+                    //         Color::new(0.2, 0.2, 0.2, 0.5),
+                    //     );
+                    // }
 
                     let text = format!("{}", v_idx);
                     let text_dim = measure_text(&text, None, 16, 1.0);
