@@ -36,29 +36,51 @@ impl GameState {
 
         // Thay vì dùng for, ta dùng while để đảm bảo sinh ĐỦ m cái ngoặc KHÁC NHAU
         while clauses.len() < m {
-            let k = rng.random_range(3..=3.min(n)); // Ông đang set cứng 3 ở đây
+            let k = rng.random_range(3..=3.min(n)); // Set cứng K=3
 
             let mut available_vars: Vec<usize> = (0..n).collect();
             available_vars.shuffle(&mut rng);
             let chosen_vars = &available_vars[0..k];
 
             let mut literals = Vec::new();
-            let mut is_sat = false;
+            let mut num_sat = 0; // Đếm số lượng biến ĐÚNG so với nghiệm gốc
 
             for &v in chosen_vars {
                 let sign = rng.random_bool(0.5);
                 literals.push((v, sign));
                 if solution[v] == sign {
-                    is_sat = true;
+                    num_sat += 1;
                 }
             }
 
-            if !is_sat {
+            // ====================================================
+            // 🔥 THUẬT TOÁN SIẾT ĐỘ KHÓ (STRICT 1-SATISFIABLE) 🔥
+            // ====================================================
+            if num_sat == 0 {
+                // 1. Đang sai hết -> Bắt buộc lật 1 cái để bài toán có đường sống
                 let lucky = rng.random_range(0..k);
                 literals[lucky].1 = !literals[lucky].1;
-            }
+            } else if num_sat > 1 && rng.random_bool(0.85) {
+                // 2. NẾU QUÁ DỄ (Có 2 hoặc 3 lối thoát)
+                // -> 85% xác suất sẽ bít cửa, chỉ chừa lại đúng 1 lối thoát!
+                let mut sat_indices = Vec::new();
+                for i in 0..k {
+                    if solution[literals[i].0] == literals[i].1 {
+                        sat_indices.push(i);
+                    }
+                }
 
-            // Sắp xếp thứ tự biến như cũ
+                // Trộn ngẫu nhiên các lối thoát
+                sat_indices.shuffle(&mut rng);
+
+                // Giữ lại đúng 1 lối thoát (index 0). Lật ngược tất cả các lối còn lại thành SAI
+                for &idx in &sat_indices[1..] {
+                    literals[idx].1 = !literals[idx].1;
+                }
+            }
+            // ====================================================
+
+            // Sắp xếp thứ tự biến tăng dần (UI gọn gàng)
             literals.sort_by_key(|&(v_idx, _)| v_idx);
 
             // KIỂM TRA TRÙNG LẶP: Nếu insert thành công (tức là chưa từng xuất hiện)
@@ -69,7 +91,7 @@ impl GameState {
 
         Self {
             n,
-            vars: vec![false; n],
+            vars: vec![false; n], // Bắt đầu tất cả đều là Đỏ
             clauses,
             is_won: false,
             steps: 0,
