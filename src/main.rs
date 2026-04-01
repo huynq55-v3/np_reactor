@@ -221,7 +221,6 @@ async fn main() {
                 GOLD,
             );
         } else {
-            let mut unsat_count = 0;
             let mut cx = 20.0;
             let mut cy = clauses_area_y;
 
@@ -235,8 +234,6 @@ async fn main() {
                 }
 
                 if !clause_sat {
-                    unsat_count += 1;
-
                     // Thiết lập kích thước cho từng ô biến nhỏ
                     let literal_w = 40.0;
                     let literal_h = 30.0;
