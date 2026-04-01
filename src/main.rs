@@ -313,7 +313,7 @@ async fn main() {
                         draw_rectangle(lx, cy, literal_w, literal_h, bg_color);
                         draw_rectangle_lines(lx, cy, literal_w, literal_h, 1.0, WHITE);
 
-                        let text = format!("V{}", v_idx);
+                        let text = format!("{}", v_idx);
                         let text_dim = measure_text(&text, None, 16, 1.0);
                         draw_text(
                             &text,
