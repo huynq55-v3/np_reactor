@@ -598,8 +598,13 @@ async fn main() {
 
         draw_text(
             &format!(
-                "N={} | Steps: {} (P=NP: ~{}) | Sols: {} | Cur State: {}",
-                current_n, game.steps, target_pnp, game.actual_sols, current_state_count
+                "N={} | Steps: {} (P=NP: ~{}) | Sols: {} | Cur State: {} | Threshold: {:.1}%",
+                current_n,
+                game.steps,
+                target_pnp,
+                game.actual_sols,
+                current_state_count,
+                current_threshold
             ),
             10.0,
             30.0,
