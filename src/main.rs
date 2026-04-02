@@ -338,7 +338,7 @@ impl GameState {
                     }
                 }
 
-                let actual_sols = 1;
+                let actual_sols = Self::count_solutions(n, &clauses);
                 let mut initial_vars = vec![false; n];
                 for i in 0..n {
                     initial_vars[i] = rng.gen_bool(0.5);
