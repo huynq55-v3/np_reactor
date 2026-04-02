@@ -59,8 +59,6 @@ struct GameState {
 
     // BỘ NHỚ LƯU TRÚ (Sổ ghi chép Tần suất Trạng thái)
     visited_counts: HashMap<Vec<bool>, u32>,
-    // LƯU SỐ LẦN LẬT CỦA TỪNG CÔNG TẮC (Heatmap)
-    flip_counts: Vec<u32>,
 }
 
 impl GameState {
@@ -155,7 +153,6 @@ impl GameState {
                     actual_sols,
                     last_flipped: None,
                     visited_counts: initial_counts,
-                    flip_counts: vec![0; n], // Khởi tạo số lần lật bằng 0
                 };
             }
         }
@@ -524,27 +521,6 @@ async fn main() {
                 custom_font.as_ref(),
             );
 
-            // --- 3. VẼ SỐ LẦN ĐÃ LẬT (HEATMAP Ở DƯỚI) ---
-            let flip_txt = format!("{}", game.flip_counts[i]);
-            let f_dim = measure_text(&flip_txt, None, 14, 1.0);
-
-            // Nếu flip_counts quá cao, cho màu cam/đỏ để cảnh báo bị dính mắc vào biến này
-            let flip_color = if game.flip_counts[i] == 0 {
-                Color::new(0.6, 0.6, 0.6, 1.0)
-            } else if game.flip_counts[i] < 5 {
-                WHITE
-            } else {
-                ORANGE
-            };
-
-            draw_text(
-                &flip_txt,
-                vx + (var_size - f_dim.width) / 2.0,
-                vy + var_size + 14.0,
-                14.0,
-                flip_color,
-            );
-
             // --- BẮT SỰ KIỆN LẬT CÔNG TẮC ---
             if !game.is_won && is_mouse_button_pressed(MouseButton::Left) {
                 let (mx, my) = mouse_position();
@@ -552,10 +528,6 @@ async fn main() {
                     game.vars[i] = !game.vars[i];
                     game.steps += 1;
                     game.last_flipped = Some(i);
-                    game.flip_counts[i] += 1; // TĂNG BIẾN ĐẾM SỐ LẦN LẬT
-                    if game.flip_counts[i] > 2 {
-                        game.flip_counts[i] = 1;
-                    }
                     game.check_win_condition();
 
                     *game.visited_counts.entry(game.vars.clone()).or_insert(0) += 1;
