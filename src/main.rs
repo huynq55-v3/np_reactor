@@ -223,6 +223,10 @@ impl GameState {
                         let mut triplet = vec![a, b, c];
                         triplet.sort();
 
+                        let a = triplet[0];
+                        let b = triplet[1];
+                        let c = triplet[2];
+
                         if seen_triplets.insert(triplet.clone()) {
                             let xor_result =
                                 secret_solution[a] ^ secret_solution[b] ^ secret_solution[c];
@@ -258,11 +262,15 @@ impl GameState {
                 } else {
                     // XorRing Logic
                     for i in 0..n {
-                        let a = i;
-                        let b = (i + 1) % n;
-                        let c = (i + 2) % n;
+                        let mut triplet = vec![i, (i + 1) % n, (i + 2) % n];
+                        triplet.sort();
+                        let a = triplet[0];
+                        let b = triplet[1];
+                        let c = triplet[2];
+
                         let xor_result =
                             secret_solution[a] ^ secret_solution[b] ^ secret_solution[c];
+
                         if xor_result == true {
                             clauses.push(Clause {
                                 literals: vec![(a, true), (b, true), (c, true)],
