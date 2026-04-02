@@ -1,6 +1,6 @@
 use ::rand::{Rng, seq::SliceRandom as _};
 use macroquad::prelude::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet}; // Thêm HashMap
 
 // Bridge (Cầu nối) để rand 0.8 chạy được trên Macroquad Web
 fn macroquad_getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
@@ -56,6 +56,9 @@ struct GameState {
     threshold_pct: f32,
     actual_sols: usize,
     last_flipped: Option<usize>,
+
+    // BỘ NHỚ LƯU TRÚ (Sổ ghi chép Tần suất Trạng thái)
+    visited_counts: HashMap<Vec<bool>, u32>,
 }
 
 impl GameState {
@@ -137,6 +140,10 @@ impl GameState {
                     }
                 }
 
+                // Khởi tạo sổ ghi chép
+                let mut initial_counts = HashMap::new();
+                initial_counts.insert(initial_vars.clone(), 1);
+
                 return Self {
                     n,
                     vars: initial_vars,
@@ -146,6 +153,7 @@ impl GameState {
                     threshold_pct,
                     actual_sols,
                     last_flipped: None,
+                    visited_counts: initial_counts,
                 };
             }
         }
@@ -204,7 +212,6 @@ async fn main() {
     let mut scroll_y: f32 = 0.0;
     let mut max_scroll: f32 = 0.0;
 
-    // Đổi màu nền sang Xám Xanh (Slate Gray) để nổi bật cả Trắng và Đen
     let bg_color = Color::new(0.4, 0.45, 0.5, 1.0);
 
     loop {
@@ -225,7 +232,9 @@ async fn main() {
             }
             temp_bx += btn_w + gap;
         }
-        let vars_area_y = temp_by + btn_h + 20.0;
+
+        // Đẩy dàn biến xuống một chút để có chỗ vẽ con số Radar phía trên
+        let vars_area_y = temp_by + btn_h + 35.0;
 
         let var_size = 35.0;
         let var_gap = 10.0;
@@ -234,7 +243,7 @@ async fn main() {
         for _ in 0..game.n {
             if temp_vx + var_size > sw - 10.0 {
                 temp_vx = 10.0;
-                temp_vy += var_size + var_gap;
+                temp_vy += var_size + var_gap + 15.0; // Thêm gap dọc để vẽ radar
             }
             temp_vx += var_size + var_gap;
         }
@@ -311,14 +320,12 @@ async fn main() {
 
                 let mut lx = cx;
                 for &(v_idx, required_sign) in &clause.literals {
-                    // XỬ LÝ ÂM DƯƠNG: Trắng nền/Đen chữ hoặc Đen nền/Trắng chữ
                     let (mut bg_c, mut txt_c) = if required_sign {
-                        (WHITE, BLACK) // Trắng
+                        (WHITE, BLACK)
                     } else {
-                        (BLACK, WHITE) // Đen
+                        (BLACK, WHITE)
                     };
 
-                    // Làm mờ khi mệnh đề đã thỏa mãn
                     if clause_sat {
                         bg_c.a = 0.3;
                         txt_c.a = 0.4;
@@ -358,7 +365,7 @@ async fn main() {
         let actual_bottom_y = cy + scroll_y + 50.0;
         max_scroll = (actual_bottom_y - sh).max(0.0);
 
-        // 4. MASKING (VẼ ĐÈ CHE PHẦN MỆNH ĐỀ CUỘN LÊN)
+        // 4. MASKING
         draw_rectangle(0.0, 0.0, sw, clauses_area_y - 25.0, bg_color);
         draw_line(
             10.0,
@@ -379,15 +386,28 @@ async fn main() {
         let target_soa = (steps_per_restart * expected_restarts).round() as u32;
         let target_pnp = (current_n as u32).pow(3);
 
+        // Lấy số lần ông đã đứng ở chính trạng thái hiện tại
+        let current_state_count = game.visited_counts.get(&game.vars).unwrap_or(&1);
+        let warning_color = if *current_state_count >= 3 {
+            RED
+        } else {
+            YELLOW
+        };
+
         draw_text(
             &format!(
-                "N={} | Steps: {} (SotA: ~{}, P=NP: ~{}) | Sols: {}",
-                current_n, game.steps, target_soa, target_pnp, game.actual_sols
+                "N={} | Steps: {} (SotA: ~{}, P=NP: ~{}) | Sols: {} | Cur State: {}",
+                current_n,
+                game.steps,
+                target_soa,
+                target_pnp,
+                game.actual_sols,
+                current_state_count
             ),
             10.0,
             30.0,
             font_size,
-            YELLOW,
+            warning_color,
         );
 
         let mut bx = 10.0;
@@ -425,28 +445,46 @@ async fn main() {
             game = GameState::randomerate(current_n, current_threshold);
             scroll_y = 0.0;
         }
-        if draw_btn("Thresh (+)", Color::new(0.2, 0.3, 0.5, 1.0)) {
-            current_threshold += 0.5;
-            game = GameState::randomerate(current_n, current_threshold);
-            scroll_y = 0.0;
-        }
-        if draw_btn("Thresh (-)", Color::new(0.5, 0.2, 0.2, 1.0)) {
-            current_threshold = (current_threshold - 0.5).max(0.1);
-            game = GameState::randomerate(current_n, current_threshold);
-            scroll_y = 0.0;
-        }
 
-        // VẼ DÀN CÔNG TẮC (TRẮNG ĐEN)
+        // VẼ DÀN CÔNG TẮC KÈM "RADAR TRẠNG THÁI"
         let mut vx = 10.0;
         let mut vy = vars_area_y;
 
         for i in 0..game.n {
             if vx + var_size > sw - 10.0 {
                 vx = 10.0;
-                vy += var_size + var_gap;
+                vy += var_size + var_gap + 15.0; // Xuống dòng
             }
 
-            // Công tắc cũng theo quy luật Trắng/Đen
+            // --- TÍNH TOÁN TRẠNG THÁI TƯƠNG LAI ---
+            // Nếu tôi bấm nút `i` này, tôi sẽ đi tới trạng thái nào?
+            let mut projected_vars = game.vars.clone();
+            projected_vars[i] = !projected_vars[i];
+
+            // Tra sổ xem trạng thái tương lai đó đã gặp mấy lần rồi
+            let proj_count = game.visited_counts.get(&projected_vars).unwrap_or(&0);
+
+            // Vẽ con số đếm (Radar) ngay trên đầu công tắc
+            let count_txt = format!("{}", proj_count);
+            let c_dim = measure_text(&count_txt, None, 16, 1.0);
+
+            let count_color = if *proj_count == 0 {
+                Color::new(0.7, 0.7, 0.7, 1.0) // Xám nhạt: Cửa mới, an toàn để khám phá
+            } else if *proj_count < 3 {
+                YELLOW // Vàng: Đã ghé qua, cẩn thận
+            } else {
+                RED // Đỏ: Nghiệp báo, luân hồi, né khẩn cấp!
+            };
+
+            draw_text(
+                &count_txt,
+                vx + (var_size - c_dim.width) / 2.0,
+                vy - 4.0,
+                16.0,
+                count_color,
+            );
+
+            // --- VẼ CÔNG TẮC BÌNH THƯỜNG ---
             let (bg_c, txt_c) = if game.vars[i] {
                 (WHITE, BLACK)
             } else {
@@ -455,7 +493,6 @@ async fn main() {
 
             draw_rectangle(vx, vy, var_size, var_size, bg_c);
 
-            // Giữ viền xanh nhạt để biết mình vừa click nút nào
             if game.last_flipped == Some(i) {
                 draw_rectangle_lines(
                     vx - 2.0,
@@ -478,6 +515,7 @@ async fn main() {
                 custom_font.as_ref(),
             );
 
+            // BẮT SỰ KIỆN LẬT CÔNG TẮC
             if !game.is_won && is_mouse_button_pressed(MouseButton::Left) {
                 let (mx, my) = mouse_position();
                 if mx >= vx && mx <= vx + var_size && my >= vy && my <= vy + var_size {
@@ -485,6 +523,9 @@ async fn main() {
                     game.steps += 1;
                     game.last_flipped = Some(i);
                     game.check_win_condition();
+
+                    // GHI SỔ TRẠNG THÁI HIỆN TẠI VỪA BƯỚC VÀO
+                    *game.visited_counts.entry(game.vars.clone()).or_insert(0) += 1;
                 }
             }
             vx += var_size + var_gap;
