@@ -205,8 +205,8 @@ async fn main() {
     let mut current_threshold = 1.0;
 
     // Shuffle symbols once at the start of the game
-    let mut symbols = VAR_SYMBOLS;
-    symbols.shuffle(&mut ::rand::thread_rng());
+    // let mut symbols = VAR_SYMBOLS;
+    // symbols.shuffle(&mut ::rand::thread_rng());
 
     let mut game = GameState::randomerate(current_n, current_threshold);
 
@@ -336,7 +336,7 @@ async fn main() {
                     }
 
                     // VẼ KÝ HIỆU THAY VÌ CON SỐ
-                    let text = symbols[v_idx % MAX_N];
+                    let text = VAR_SYMBOLS[v_idx % MAX_N];
                     let text_dim = measure_sym(text, 18.0, custom_font.as_ref());
                     draw_sym(
                         text,
@@ -465,7 +465,7 @@ async fn main() {
             }
 
             // VẼ KÝ HIỆU THAY VÌ CON SỐ
-            let text = symbols[i % MAX_N];
+            let text = VAR_SYMBOLS[i % MAX_N];
             let text_dim = measure_sym(text, 22.0, custom_font.as_ref());
             draw_sym(
                 text,
