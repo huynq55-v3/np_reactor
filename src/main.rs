@@ -381,8 +381,12 @@ async fn main() {
         let font_size = if sw < 600.0 { 16.0 } else { 22.0 };
 
         // TÍNH TOÁN TARGET ĐỂ SO SÁNH
-        // 1. Giới hạn Toán học hiện tại (Schöning Algorithm)
-        let target_soa = (1.3333_f64).powf(current_n as f64).round() as u32;
+        // 1. Giới hạn Toán học hiện tại (Schöning Algorithm chuẩn)
+        // Hệ số 3N (bước lật mỗi vòng) nhân với (4/3)^N (số vòng restart)
+        let steps_per_restart = 3.0 * current_n as f64;
+        let expected_restarts = (1.333333_f64).powf(current_n as f64);
+        let target_soa = (steps_per_restart * expected_restarts).round() as u32;
+
         // 2. Mục tiêu Đa thức để chứng minh P=NP (Dùng N^3 làm chuẩn)
         let target_pnp = (current_n as u32).pow(3);
 
