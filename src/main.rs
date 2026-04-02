@@ -14,9 +14,10 @@ getrandom::register_custom_getrandom!(macroquad_getrandom);
 // ==========================================
 // TỪ ĐIỂN BIỂU TƯỢNG (SYMBOL DICTIONARY)
 // ==========================================
-const MAX_N: usize = 12; // Chừa sẵn 30 biểu tượng để ông tăng N
+const MAX_N: usize = 26; // Chừa sẵn 30 biểu tượng để ông tăng N
 const VAR_SYMBOLS: [&str; MAX_N] = [
-    "QH", "MH", "DT", "DQ", "VC", "VM", "BT", "HD", "B", "A", "M", "S",
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S",
+    "T", "U", "V", "W", "X", "Y", "Z",
 ];
 
 // Hàm hỗ trợ vẽ Text Custom Font cho Unicode
