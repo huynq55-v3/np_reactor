@@ -300,9 +300,12 @@ impl GameState {
                         }
                     }
                     for i in 0..(n / 2) {
-                        let a = i;
-                        let b = (i + n / 2) % n;
-                        let c = (i + n / 4) % n;
+                        let mut triplet = vec![i, (i + n / 2) % n, (i + n / 4) % n];
+                        triplet.sort();
+                        let a = triplet[0];
+                        let b = triplet[1];
+                        let c = triplet[2];
+
                         let xor_result =
                             secret_solution[a] ^ secret_solution[b] ^ secret_solution[c];
                         if xor_result == true {
