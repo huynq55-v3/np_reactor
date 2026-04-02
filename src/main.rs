@@ -553,6 +553,9 @@ async fn main() {
                     game.steps += 1;
                     game.last_flipped = Some(i);
                     game.flip_counts[i] += 1; // TĂNG BIẾN ĐẾM SỐ LẦN LẬT
+                    if game.flip_counts[i] > 2 {
+                        game.flip_counts[i] = 1;
+                    }
                     game.check_win_condition();
 
                     *game.visited_counts.entry(game.vars.clone()).or_insert(0) += 1;
