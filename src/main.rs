@@ -14,7 +14,7 @@ getrandom::register_custom_getrandom!(macroquad_getrandom);
 // ==========================================
 // TỪ ĐIỂN BIỂU TƯỢNG (SYMBOL DICTIONARY)
 // ==========================================
-const MAX_N: usize = 36; // Chừa sẵn 30 biểu tượng để ông tăng N
+const MAX_N: usize = 36;
 const VAR_SYMBOLS: [&str; MAX_N] = [
     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "I",
     "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
@@ -117,14 +117,11 @@ impl GameState {
             let actual_sols = Self::count_solutions(n, &clauses);
 
             if actual_sols > 0 && actual_sols <= max_sols {
-                // TẠO MẢNG RANDOM TRẠNG THÁI KHỞI ĐẦU
                 let mut initial_vars = vec![false; n];
                 for i in 0..n {
                     initial_vars[i] = rng.gen_bool(0.5);
                 }
 
-                // Cần kiểm tra xem xui xui random trúng ngay cái nghiệm luôn không
-                // Nếu trúng nghiệm ngay lúc đầu thì win luôn (dù tỉ lệ cực thấp)
                 let mut initial_win = true;
                 for clause in &clauses {
                     let mut clause_sat = false;
@@ -142,9 +139,9 @@ impl GameState {
 
                 return Self {
                     n,
-                    vars: initial_vars, // <--- ĐÃ ĐỔI THÀNH MẢNG RANDOM
+                    vars: initial_vars,
                     clauses,
-                    is_won: initial_win, // Cập nhật đúng trạng thái Win
+                    is_won: initial_win,
                     steps: 0,
                     threshold_pct,
                     actual_sols,
@@ -176,10 +173,10 @@ impl GameState {
 fn window_conf() -> Conf {
     Conf {
         window_title: "NP-Reactor Symbolic".to_owned(),
-        window_width: 1920,  // Tăng chiều rộng mặc định
-        window_height: 1080, // Tăng chiều cao mặc định
-        high_dpi: true,      // <--- CHÌA KHÓA: Bật High-DPI để hỗ trợ màn hình nét
-        sample_count: 4,     // <--- Khử răng cưa (Anti-aliasing), để 4 hoặc 8 là mượt
+        window_width: 1920,
+        window_height: 1080,
+        high_dpi: true,
+        sample_count: 4,
         ..Default::default()
     }
 }
@@ -189,7 +186,6 @@ fn window_conf() -> Conf {
 // ==========================================
 #[macroquad::main(window_conf)]
 async fn main() {
-    // Tải font Unicode
     let font_bytes = std::fs::read("font.ttf");
     let custom_font = match font_bytes {
         Ok(bytes) => load_ttf_font_from_bytes(&bytes).ok(),
@@ -203,15 +199,13 @@ async fn main() {
 
     let mut current_n = 4;
     let mut current_threshold = 1.0;
-
-    // Shuffle symbols once at the start of the game
-    // let mut symbols = VAR_SYMBOLS;
-    // symbols.shuffle(&mut ::rand::thread_rng());
-
     let mut game = GameState::randomerate(current_n, current_threshold);
 
     let mut scroll_y: f32 = 0.0;
     let mut max_scroll: f32 = 0.0;
+
+    // Đổi màu nền sang Xám Xanh (Slate Gray) để nổi bật cả Trắng và Đen
+    let bg_color = Color::new(0.4, 0.45, 0.5, 1.0);
 
     loop {
         let sw = screen_width();
@@ -259,7 +253,6 @@ async fn main() {
         scroll_y = scroll_y.clamp(0.0, max_scroll);
 
         // 3. XÓA NỀN & VẼ CÁC MỆNH ĐỀ (CUỘN ĐƯỢC)
-        let bg_color = Color::new(0.1, 0.1, 0.12, 1.0);
         clear_background(bg_color);
 
         let mut cx = 15.0;
@@ -312,21 +305,23 @@ async fn main() {
                         exact_clause_w + pad * 2.0,
                         literal_h + pad * 2.0,
                         1.0,
-                        Color::new(0.3, 0.3, 0.3, 1.0),
+                        Color::new(0.2, 0.2, 0.2, 1.0),
                     );
                 }
 
                 let mut lx = cx;
                 for &(v_idx, required_sign) in &clause.literals {
-                    let mut bg_c = if !required_sign {
-                        Color::new(0.6, 0.1, 0.1, 1.0)
+                    // XỬ LÝ ÂM DƯƠNG: Trắng nền/Đen chữ hoặc Đen nền/Trắng chữ
+                    let (mut bg_c, mut txt_c) = if required_sign {
+                        (WHITE, BLACK) // Trắng
                     } else {
-                        Color::new(0.1, 0.5, 0.1, 1.0)
+                        (BLACK, WHITE) // Đen
                     };
-                    let mut txt_c = WHITE;
+
+                    // Làm mờ khi mệnh đề đã thỏa mãn
                     if clause_sat {
-                        bg_c.a = 0.4;
-                        txt_c = Color::new(0.7, 0.7, 0.7, 1.0);
+                        bg_c.a = 0.3;
+                        txt_c.a = 0.4;
                     }
 
                     draw_rectangle(lx, cy, literal_w, literal_h, bg_c);
@@ -335,7 +330,6 @@ async fn main() {
                         draw_rectangle_lines(lx, cy, literal_w, literal_h, 2.0, SKYBLUE);
                     }
 
-                    // VẼ KÝ HIỆU THAY VÌ CON SỐ
                     let text = VAR_SYMBOLS[v_idx % MAX_N];
                     let text_dim = measure_sym(text, 18.0, custom_font.as_ref());
                     draw_sym(
@@ -357,14 +351,14 @@ async fn main() {
                 10.0,
                 clauses_area_y - scroll_y - 5.0,
                 16.0,
-                ORANGE,
+                YELLOW,
             );
         }
 
         let actual_bottom_y = cy + scroll_y + 50.0;
         max_scroll = (actual_bottom_y - sh).max(0.0);
 
-        // 4. MASKING
+        // 4. MASKING (VẼ ĐÈ CHE PHẦN MỆNH ĐỀ CUỘN LÊN)
         draw_rectangle(0.0, 0.0, sw, clauses_area_y - 25.0, bg_color);
         draw_line(
             10.0,
@@ -372,7 +366,7 @@ async fn main() {
             sw - 10.0,
             clauses_area_y - 25.0,
             2.0,
-            GRAY,
+            DARKGRAY,
         );
 
         // ===============================================
@@ -380,14 +374,9 @@ async fn main() {
         // ===============================================
         let font_size = if sw < 600.0 { 16.0 } else { 22.0 };
 
-        // TÍNH TOÁN TARGET ĐỂ SO SÁNH
-        // 1. Giới hạn Toán học hiện tại (Schöning Algorithm chuẩn)
-        // Hệ số 3N (bước lật mỗi vòng) nhân với (4/3)^N (số vòng restart)
         let steps_per_restart = 3.0 * current_n as f64;
         let expected_restarts = (1.333333_f64).powf(current_n as f64);
         let target_soa = (steps_per_restart * expected_restarts).round() as u32;
-
-        // 2. Mục tiêu Đa thức để chứng minh P=NP (Dùng N^3 làm chuẩn)
         let target_pnp = (current_n as u32).pow(3);
 
         draw_text(
@@ -427,27 +416,27 @@ async fn main() {
             }
         };
 
-        if draw_btn("N + 1", Color::new(0.2, 0.6, 0.2, 1.0)) {
+        if draw_btn("N + 1", Color::new(0.2, 0.4, 0.2, 1.0)) {
             current_n += 1;
             game = GameState::randomerate(current_n, current_threshold);
             scroll_y = 0.0;
         }
-        if draw_btn("New Game", Color::new(0.8, 0.6, 0.1, 1.0)) {
+        if draw_btn("New Game", Color::new(0.6, 0.4, 0.1, 1.0)) {
             game = GameState::randomerate(current_n, current_threshold);
             scroll_y = 0.0;
         }
-        if draw_btn("Thresh (+)", Color::new(0.2, 0.4, 0.6, 1.0)) {
+        if draw_btn("Thresh (+)", Color::new(0.2, 0.3, 0.5, 1.0)) {
             current_threshold += 0.5;
             game = GameState::randomerate(current_n, current_threshold);
             scroll_y = 0.0;
         }
-        if draw_btn("Thresh (-)", Color::new(0.6, 0.2, 0.2, 1.0)) {
+        if draw_btn("Thresh (-)", Color::new(0.5, 0.2, 0.2, 1.0)) {
             current_threshold = (current_threshold - 0.5).max(0.1);
             game = GameState::randomerate(current_n, current_threshold);
             scroll_y = 0.0;
         }
 
-        // VẼ DÀN CÔNG TẮC BẰNG KÝ HIỆU
+        // VẼ DÀN CÔNG TẮC (TRẮNG ĐEN)
         let mut vx = 10.0;
         let mut vy = vars_area_y;
 
@@ -457,13 +446,16 @@ async fn main() {
                 vy += var_size + var_gap;
             }
 
-            let color = if game.vars[i] {
-                Color::new(0.1, 0.6, 0.1, 1.0)
+            // Công tắc cũng theo quy luật Trắng/Đen
+            let (bg_c, txt_c) = if game.vars[i] {
+                (WHITE, BLACK)
             } else {
-                Color::new(0.6, 0.1, 0.1, 1.0)
+                (BLACK, WHITE)
             };
-            draw_rectangle(vx, vy, var_size, var_size, color);
 
+            draw_rectangle(vx, vy, var_size, var_size, bg_c);
+
+            // Giữ viền xanh nhạt để biết mình vừa click nút nào
             if game.last_flipped == Some(i) {
                 draw_rectangle_lines(
                     vx - 2.0,
@@ -475,7 +467,6 @@ async fn main() {
                 );
             }
 
-            // VẼ KÝ HIỆU THAY VÌ CON SỐ
             let text = VAR_SYMBOLS[i % MAX_N];
             let text_dim = measure_sym(text, 22.0, custom_font.as_ref());
             draw_sym(
@@ -483,7 +474,7 @@ async fn main() {
                 vx + (var_size - text_dim.width) / 2.0,
                 vy + (var_size + text_dim.height) / 2.0 - 4.0,
                 22.0,
-                WHITE,
+                txt_c,
                 custom_font.as_ref(),
             );
 
