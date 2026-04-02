@@ -379,10 +379,17 @@ async fn main() {
         // 5. VẼ UI BẢNG ĐIỀU KHIỂN & CÔNG TẮC
         // ===============================================
         let font_size = if sw < 600.0 { 16.0 } else { 22.0 };
+
+        // TÍNH TOÁN TARGET ĐỂ SO SÁNH
+        // 1. Giới hạn Toán học hiện tại (Schöning Algorithm)
+        let target_soa = (1.3333_f64).powf(current_n as f64).round() as u32;
+        // 2. Mục tiêu Đa thức để chứng minh P=NP (Dùng N^3 làm chuẩn)
+        let target_pnp = (current_n as u32).pow(3);
+
         draw_text(
             &format!(
-                "N={} | Steps: {} | Thresh: {:.1}% | Sols: {}",
-                current_n, game.steps, current_threshold, game.actual_sols
+                "N={} | Steps: {} (SotA: ~{}, P=NP: ~{}) | Sols: {}",
+                current_n, game.steps, target_soa, target_pnp, game.actual_sols
             ),
             10.0,
             30.0,
