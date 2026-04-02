@@ -14,9 +14,9 @@ getrandom::register_custom_getrandom!(macroquad_getrandom);
 // ==========================================
 // TỪ ĐIỂN BIỂU TƯỢNG (SYMBOL DICTIONARY)
 // ==========================================
-const MAX_N: usize = 16; // Chừa sẵn 30 biểu tượng để ông tăng N
+const MAX_N: usize = 12; // Chừa sẵn 30 biểu tượng để ông tăng N
 const VAR_SYMBOLS: [&str; MAX_N] = [
-    "空", "覺", "心", "理", "性", "靜", "無", "氣", "慧", "悟", "寂", "易", "道", "源", "幻", "靈",
+    "QH", "MH", "DT", "DQ", "VC", "VM", "BT", "HD", "B", "A", "M", "S",
 ];
 
 // Hàm hỗ trợ vẽ Text Custom Font cho Unicode
@@ -202,6 +202,11 @@ async fn main() {
 
     let mut current_n = 4;
     let mut current_threshold = 1.0;
+
+    // Shuffle symbols once at the start of the game
+    let mut symbols = VAR_SYMBOLS;
+    symbols.shuffle(&mut ::rand::thread_rng());
+
     let mut game = GameState::randomerate(current_n, current_threshold);
 
     let mut scroll_y: f32 = 0.0;
@@ -330,7 +335,7 @@ async fn main() {
                     }
 
                     // VẼ KÝ HIỆU THAY VÌ CON SỐ
-                    let text = VAR_SYMBOLS[v_idx % MAX_N];
+                    let text = symbols[v_idx % MAX_N];
                     let text_dim = measure_sym(text, 18.0, custom_font.as_ref());
                     draw_sym(
                         text,
@@ -459,7 +464,7 @@ async fn main() {
             }
 
             // VẼ KÝ HIỆU THAY VÌ CON SỐ
-            let text = VAR_SYMBOLS[i % MAX_N];
+            let text = symbols[i % MAX_N];
             let text_dim = measure_sym(text, 22.0, custom_font.as_ref());
             draw_sym(
                 text,
