@@ -46,6 +46,7 @@ enum GameMode {
     Random,
     XorRandom,
     XorRing,
+    Avalanche,
 }
 
 impl GameMode {
@@ -53,7 +54,8 @@ impl GameMode {
         match self {
             GameMode::Random => GameMode::XorRandom,
             GameMode::XorRandom => GameMode::XorRing,
-            GameMode::XorRing => GameMode::Random,
+            GameMode::XorRing => GameMode::Avalanche,
+            GameMode::Avalanche => GameMode::Random,
         }
     }
 
@@ -62,6 +64,7 @@ impl GameMode {
             GameMode::Random => "Mode: Random",
             GameMode::XorRandom => "Mode: XOR Rnd",
             GameMode::XorRing => "Mode: XOR Ring",
+            GameMode::Avalanche => "Mode: Avalanche",
         }
     }
 }
@@ -411,6 +414,115 @@ impl GameState {
                     mode,
                 };
             }
+
+            // ---------------------------------------------------------
+            // THE AVALANCHE (Mạch Logic Tuyết Lở)
+            // (Mô phỏng hàm băm Crypto / Nhân số nguyên tố)
+            // ---------------------------------------------------------
+            GameMode::Avalanche => {
+                let mut secret_solution = vec![false; n];
+
+                // Phân chia vai trò của các biến
+                let num_inputs = (n / 3).max(2); // Nhóm Input (A, B)
+                let num_outputs = (n / 3).max(1); // Nhóm Output (Mã Khóa)
+
+                // 1. Chỉ sinh ngẫu nhiên cho nhóm Input
+                for i in 0..num_inputs {
+                    secret_solution[i] = rng.gen_bool(0.5);
+                }
+
+                let mut clauses = Vec::new();
+
+                // 2. Xây dựng Cổng Logic lây lan từ Trái sang Phải
+                for i in num_inputs..n {
+                    let a = rng.gen_range(0..i);
+                    let mut b = rng.gen_range(0..i);
+                    while b == a {
+                        b = rng.gen_range(0..i);
+                    }
+
+                    // 60% cổng XOR, 40% cổng AND
+                    let is_xor = rng.gen_bool(0.6);
+
+                    if is_xor {
+                        secret_solution[i] = secret_solution[a] ^ secret_solution[b];
+                        // Ràng buộc cứng: i <=> a XOR b
+                        clauses.push(Clause {
+                            literals: vec![(a, true), (b, true), (i, false)],
+                        });
+                        clauses.push(Clause {
+                            literals: vec![(a, true), (b, false), (i, true)],
+                        });
+                        clauses.push(Clause {
+                            literals: vec![(a, false), (b, true), (i, true)],
+                        });
+                        clauses.push(Clause {
+                            literals: vec![(a, false), (b, false), (i, false)],
+                        });
+                    } else {
+                        secret_solution[i] = secret_solution[a] & secret_solution[b];
+                        // Ràng buộc cứng: i <=> a AND b
+                        clauses.push(Clause {
+                            literals: vec![(a, true), (i, false)],
+                        });
+                        clauses.push(Clause {
+                            literals: vec![(b, true), (i, false)],
+                        });
+                        clauses.push(Clause {
+                            literals: vec![(a, false), (b, false), (i, true)],
+                        });
+                    }
+                }
+
+                // 3. THE LOCKS (Khóa Output)
+                for i in (n - num_outputs)..n {
+                    let req = secret_solution[i];
+                    clauses.push(Clause {
+                        literals: vec![(i, req)],
+                    });
+                }
+
+                let actual_sols = Self::count_solutions(n, &clauses);
+
+                // Bắt đầu game với bảng mạch bị nhiễu (Lật ngẫu nhiên 50%)
+                let mut initial_vars = secret_solution.clone();
+                for i in 0..n {
+                    if rng.gen_bool(0.5) {
+                        initial_vars[i] = !initial_vars[i];
+                    }
+                }
+
+                let mut initial_win = true;
+                for clause in &clauses {
+                    let mut clause_sat = false;
+                    for &(v_idx, req_sign) in &clause.literals {
+                        if initial_vars[v_idx] == req_sign {
+                            clause_sat = true;
+                            break;
+                        }
+                    }
+                    if !clause_sat {
+                        initial_win = false;
+                        break;
+                    }
+                }
+
+                let mut initial_counts = HashMap::new();
+                initial_counts.insert(initial_vars.clone(), 1);
+
+                return Self {
+                    n,
+                    vars: initial_vars,
+                    clauses,
+                    is_won: initial_win,
+                    steps: 0,
+                    threshold_pct,
+                    actual_sols,
+                    last_flipped: None,
+                    visited_counts: initial_counts,
+                    mode,
+                };
+            }
         }
     }
 
@@ -716,7 +828,8 @@ async fn main() {
         let mode_color = match current_mode {
             GameMode::Random => Color::new(0.2, 0.5, 0.8, 1.0),
             GameMode::XorRandom => Color::new(0.6, 0.2, 0.6, 1.0),
-            GameMode::XorRing => Color::new(0.8, 0.2, 0.2, 1.0), // Nút màu đỏ cảnh báo độ khó
+            GameMode::XorRing => Color::new(0.8, 0.2, 0.2, 1.0),
+            GameMode::Avalanche => Color::new(0.9, 0.4, 0.0, 1.0), // Cam cảnh báo Tuyết Lở
         };
 
         if draw_btn(current_mode.to_string(), mode_color) {
