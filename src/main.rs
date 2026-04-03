@@ -14,10 +14,11 @@ getrandom::register_custom_getrandom!(macroquad_getrandom);
 // ==========================================
 // TỪ ĐIỂN BIỂU TƯỢNG (SYMBOL DICTIONARY)
 // ==========================================
-const MAX_N: usize = 36;
+const MAX_N: usize = 40;
 const VAR_SYMBOLS: [&str; MAX_N] = [
     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "I",
-    "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+    "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b",
+    "c", "d",
 ];
 
 fn draw_sym(text: &str, x: f32, y: f32, size: f32, color: Color, font: Option<&Font>) {
