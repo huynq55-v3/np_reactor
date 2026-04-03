@@ -88,30 +88,66 @@ struct GameState {
 }
 
 impl GameState {
+    // Hàm gọi chính thức
     fn count_solutions(n: usize, clauses: &Vec<Clause>) -> usize {
-        let max_mask = 1_usize << n;
-        let mut count = 0;
-        for mask in 0..max_mask {
-            let mut all_sat = true;
-            for clause in clauses {
-                let mut clause_sat = false;
-                for &(v_idx, required_sign) in &clause.literals {
-                    let bit_val = (mask >> v_idx) & 1 == 1;
-                    if bit_val == required_sign {
-                        clause_sat = true;
-                        break;
+        // assignment lưu trạng thái: None = chưa gán, Some(true/false) = đã gán
+        let mut assignment = vec![None; n];
+        Self::backtrack_count(0, n, &mut assignment, clauses)
+    }
+
+    // Thuật toán Đệ quy Quay lui (Backtracking)
+    fn backtrack_count(
+        var_idx: usize,
+        n: usize,
+        assignment: &mut Vec<Option<bool>>,
+        clauses: &[Clause],
+    ) -> usize {
+        // 1. CẮT TỈA (PRUNING): Kiểm tra xem nhánh hiện tại có vi phạm mệnh đề nào không
+        for clause in clauses {
+            let mut is_sat = false;
+            let mut is_unresolved = false;
+
+            for &(v, required_sign) in &clause.literals {
+                match assignment[v] {
+                    Some(val) => {
+                        if val == required_sign {
+                            is_sat = true;
+                            break; // Mệnh đề này đã đúng, không cần xét các biến khác trong mệnh đề
+                        }
+                    }
+                    None => {
+                        is_unresolved = true; // Còn biến chưa gán, mệnh đề này vẫn còn "hy vọng"
                     }
                 }
-                if !clause_sat {
-                    all_sat = false;
-                    break;
-                }
             }
-            if all_sat {
-                count += 1;
+
+            // Nếu mệnh đề chưa đúng (is_sat = false) VÀ không còn biến nào chưa gán để cứu vãn
+            // -> Chắc chắn sai, không cần đi tiếp nhánh này!
+            if !is_sat && !is_unresolved {
+                return 0;
             }
         }
-        count
+
+        // 2. ĐIỀU KIỆN DỪNG: Đã gán thành công tất cả N biến mà không bị vi phạm
+        if var_idx == n {
+            return 1; // Tìm thấy 1 nghiệm hợp lệ
+        }
+
+        // 3. ĐỆ QUY TÌM KIẾM: Thử gán biến hiện tại bằng True và False
+        let mut total_sols = 0;
+
+        // Thử nhánh True
+        assignment[var_idx] = Some(true);
+        total_sols += Self::backtrack_count(var_idx + 1, n, assignment, clauses);
+
+        // Thử nhánh False
+        assignment[var_idx] = Some(false);
+        total_sols += Self::backtrack_count(var_idx + 1, n, assignment, clauses);
+
+        // QUAY LUI (Backtrack): Xóa trạng thái để trả lại cho nhánh khác
+        assignment[var_idx] = None;
+
+        total_sols
     }
 
     fn generate(n: usize, threshold_pct: f32, mode: GameMode) -> Self {
