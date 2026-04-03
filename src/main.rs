@@ -433,6 +433,12 @@ impl GameState {
 
                 let mut clauses = Vec::new();
 
+                // Helper: sort literals theo v_idx trước khi tạo Clause
+                let make_clause = |mut lits: Vec<(usize, bool)>| -> Clause {
+                    lits.sort_by_key(|&(v_idx, _)| v_idx);
+                    Clause { literals: lits }
+                };
+
                 // 2. Xây dựng Cổng Logic lây lan từ Trái sang Phải
                 for i in num_inputs..n {
                     let a = rng.gen_range(0..i);
@@ -447,39 +453,23 @@ impl GameState {
                     if is_xor {
                         secret_solution[i] = secret_solution[a] ^ secret_solution[b];
                         // Ràng buộc cứng: i <=> a XOR b
-                        clauses.push(Clause {
-                            literals: vec![(a, true), (b, true), (i, false)],
-                        });
-                        clauses.push(Clause {
-                            literals: vec![(a, true), (b, false), (i, true)],
-                        });
-                        clauses.push(Clause {
-                            literals: vec![(a, false), (b, true), (i, true)],
-                        });
-                        clauses.push(Clause {
-                            literals: vec![(a, false), (b, false), (i, false)],
-                        });
+                        clauses.push(make_clause(vec![(a, true), (b, true), (i, false)]));
+                        clauses.push(make_clause(vec![(a, true), (b, false), (i, true)]));
+                        clauses.push(make_clause(vec![(a, false), (b, true), (i, true)]));
+                        clauses.push(make_clause(vec![(a, false), (b, false), (i, false)]));
                     } else {
                         secret_solution[i] = secret_solution[a] & secret_solution[b];
                         // Ràng buộc cứng: i <=> a AND b
-                        clauses.push(Clause {
-                            literals: vec![(a, true), (i, false)],
-                        });
-                        clauses.push(Clause {
-                            literals: vec![(b, true), (i, false)],
-                        });
-                        clauses.push(Clause {
-                            literals: vec![(a, false), (b, false), (i, true)],
-                        });
+                        clauses.push(make_clause(vec![(a, true), (i, false)]));
+                        clauses.push(make_clause(vec![(b, true), (i, false)]));
+                        clauses.push(make_clause(vec![(a, false), (b, false), (i, true)]));
                     }
                 }
 
                 // 3. THE LOCKS (Khóa Output)
                 for i in (n - num_outputs)..n {
                     let req = secret_solution[i];
-                    clauses.push(Clause {
-                        literals: vec![(i, req)],
-                    });
+                    clauses.push(make_clause(vec![(i, req)]));
                 }
 
                 let actual_sols = Self::count_solutions(n, &clauses);
