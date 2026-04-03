@@ -184,7 +184,7 @@ impl GameState {
 
 #[macroquad::main("NP-Reactor: 12-Column Grid")]
 async fn main() {
-    let mut current_n = 32;
+    let mut current_n = 24;
     let mut current_mode = GameMode::Hard3SAT;
     let mut game = GameState::generate(current_n, current_mode);
     let bg_color = Color::new(0.4, 0.45, 0.5, 1.0);
@@ -282,7 +282,7 @@ async fn main() {
             let col = i % 32;
             let row = i / 32;
             let vx = start_vx + col as f32 * (var_size + var_gap);
-            let row_y = vy + row as f32 * (var_size + 25.0);
+            let row_y = vy + row as f32 * (var_size + 35.0);
 
             // Radar (Centered)
             let mut proj = game.vars.clone();
@@ -326,6 +326,44 @@ async fn main() {
                 txt_c,
             );
 
+            let mut x = 0;
+            let mut y = 0;
+            for c in &game.clauses {
+                let mut contains_i = false;
+                let mut cur_sat_count = 0;
+                let mut sat_by_i = false;
+
+                for &(v, req) in &c.literals {
+                    if v == i {
+                        contains_i = true;
+                    }
+                    if game.vars[v] == req {
+                        cur_sat_count += 1;
+                        if v == i {
+                            sat_by_i = true;
+                        }
+                    }
+                }
+
+                if contains_i {
+                    if cur_sat_count == 0 {
+                        x += 1;
+                    } else if cur_sat_count == 1 && sat_by_i {
+                        y += 1;
+                    }
+                }
+            }
+
+            let diff_txt = format!("-{}/+{}", x, y);
+            let d_dim = measure_text(&diff_txt, None, 14, 1.0);
+            draw_text(
+                &diff_txt,
+                vx + (var_size - d_dim.width) / 2.0,
+                row_y + var_size + 12.0,
+                14.0,
+                if x > 0 || y > 0 { ORANGE } else { DARKGRAY },
+            );
+
             if !game.is_won && is_mouse_button_pressed(MouseButton::Left) {
                 let (mx, my) = mouse_position();
                 if mx >= vx && mx <= vx + var_size && my >= row_y && my <= row_y + var_size {
@@ -344,7 +382,7 @@ async fn main() {
                 }
             }
             if i == game.n - 1 {
-                vy = row_y + var_size + 20.0;
+                vy = row_y + var_size + 30.0;
             }
         }
 
