@@ -2,10 +2,13 @@ use ::rand::{Rng, seq::SliceRandom as _};
 use macroquad::prelude::*;
 use std::collections::{HashMap, HashSet};
 
+mod hard_sat;
+use hard_sat::Puzzle;
+
 // Bridge (Cầu nối) để rand 0.8 chạy được trên Macroquad Web
 fn macroquad_getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
     for byte in buf.iter_mut() {
-        *byte = macroquad::rand::gen_range(0, 255) as u8;
+        *byte = macroquad::rand::gen_range(0, 256) as u8;
     }
     Ok(())
 }
@@ -14,11 +17,12 @@ getrandom::register_custom_getrandom!(macroquad_getrandom);
 // ==========================================
 // TỪ ĐIỂN BIỂU TƯỢNG (SYMBOL DICTIONARY)
 // ==========================================
-const MAX_N: usize = 40;
+const MAX_N: usize = 64;
 const VAR_SYMBOLS: [&str; MAX_N] = [
     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "I",
     "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b",
-    "c", "d",
+    "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u",
+    "v", "w", "x", "y", "z", "@", "#",
 ];
 
 fn draw_sym(text: &str, x: f32, y: f32, size: f32, color: Color, font: Option<&Font>) {
@@ -62,7 +66,7 @@ impl GameMode {
 
     fn to_string(&self) -> &str {
         match self {
-            GameMode::Random => "Mode: Random",
+            GameMode::Random => "Mode: Unique",
             GameMode::XorRandom => "Mode: XOR Rnd",
             GameMode::XorRing => "Mode: XOR Ring",
             GameMode::Avalanche => "Mode: Avalanche",
@@ -89,6 +93,17 @@ struct GameState {
     last_flipped: Option<usize>,
     visited_counts: HashMap<Vec<bool>, u32>,
     mode: GameMode,
+    /// Chỉ có ở mode Random (Unique): nghiệm duy nhất + thước đo WalkSAT.
+    puzzle: Option<Puzzle>,
+}
+
+/// Kết quả một ván Unique đã thắng.
+#[derive(Clone, Copy)]
+struct WinResult {
+    steps: u32,
+    min_steps: u32,
+    faster_than: f64,
+    p: f64,
 }
 
 impl GameState {
@@ -162,74 +177,37 @@ impl GameState {
             // 1. RANDOM 3-SAT PURE (Hỗn mang ngẫu nhiên thuần túy)
             // ---------------------------------------------------------
             GameMode::Random => {
-                let m = (n as f32 * 4.26) as usize;
-                let max_sols = ((1_usize << n) as f32 * (threshold_pct / 100.0)) as usize;
-                let max_sols = max_sols.max(1);
-
-                // Vòng lặp Rejection Sampling: Sinh bừa cho đến khi nào CÓ NGHIỆM thì thôi
-                loop {
-                    let mut clauses = Vec::new();
-                    let mut seen_clauses = HashSet::new();
-
-                    while clauses.len() < m {
-                        let k = rng.gen_range(3..=3.min(n));
-                        let mut available_vars: Vec<usize> = (0..n).collect();
-                        available_vars.shuffle(&mut rng);
-
-                        let mut literals = Vec::new();
-                        for i in 0..k {
-                            let v = available_vars[i];
-                            let sign = rng.gen_bool(0.5);
-                            literals.push((v, sign));
-                        }
-                        literals.sort_by_key(|&(v_idx, _)| v_idx);
-
-                        if seen_clauses.insert(literals.clone()) {
-                            clauses.push(Clause { literals });
-                        }
-                    }
-
-                    // ĐÂY LÀ CHỖ TỐN CPU NHẤT TẠI N LỚN (Duyệt cạn 2^N)
-                    let actual_sols = Self::count_solutions(n, &clauses);
-
-                    if actual_sols > 0 && actual_sols <= max_sols {
-                        let mut initial_vars = vec![false; n];
-                        for i in 0..n {
-                            initial_vars[i] = rng.gen_bool(0.5);
-                        }
-
-                        let mut initial_win = true;
-                        for clause in &clauses {
-                            let mut clause_sat = false;
-                            for &(v_idx, req_sign) in &clause.literals {
-                                if initial_vars[v_idx] == req_sign {
-                                    clause_sat = true;
-                                    break;
-                                }
-                            }
-                            if !clause_sat {
-                                initial_win = false;
-                                break;
-                            }
-                        }
-
-                        let mut initial_counts = HashMap::new();
-                        initial_counts.insert(initial_vars.clone(), 1);
-
-                        return Self {
-                            n,
-                            vars: initial_vars,
-                            clauses,
-                            is_won: initial_win,
-                            steps: 0,
-                            threshold_pct,
-                            actual_sols,
-                            last_flipped: None,
-                            visited_counts: initial_counts,
-                            mode,
-                        };
-                    }
-                }
+                // threshold_pct được dùng làm K: số bài nghiệm-duy-nhất để chọn ra bài khó nhất
+                let k = threshold_pct.max(1.0) as usize;
+                let seed: u64 = rng.r#gen();
+                let pz = hard_sat::generate_hard(n, k, seed);
+                let clauses: Vec<Clause> = pz
+                    .clauses
+                    .iter()
+                    .map(|c| {
+                        let lits = (0..n)
+                            .filter(|&v| (c.pos | c.neg) >> v & 1 == 1)
+                            .map(|v| (v, c.pos >> v & 1 == 1))
+                            .collect();
+                        Clause { literals: lits }
+                    })
+                    .collect();
+                let initial_vars: Vec<bool> = (0..n).map(|v| pz.start >> v & 1 == 1).collect();
+                let mut initial_counts = HashMap::new();
+                initial_counts.insert(initial_vars.clone(), 1);
+                return Self {
+                    n,
+                    vars: initial_vars,
+                    clauses,
+                    is_won: false,
+                    steps: 0,
+                    threshold_pct,
+                    actual_sols: 1,
+                    last_flipped: None,
+                    visited_counts: initial_counts,
+                    mode,
+                    puzzle: Some(pz),
+                };
             }
 
             // ---------------------------------------------------------
@@ -413,6 +391,7 @@ impl GameState {
                     last_flipped: None,
                     visited_counts: initial_counts,
                     mode,
+                    puzzle: None,
                 };
             }
 
@@ -512,9 +491,23 @@ impl GameState {
                     last_flipped: None,
                     visited_counts: initial_counts,
                     mode,
+                    puzzle: None,
                 };
             }
         }
+    }
+
+    fn win_result(&self) -> Option<WinResult> {
+        let pz = self.puzzle.as_ref()?;
+        if !self.is_won {
+            return None;
+        }
+        Some(WinResult {
+            steps: self.steps,
+            min_steps: pz.min_steps(),
+            faster_than: pz.faster_than(self.steps),
+            p: pz.p_value(self.steps),
+        })
     }
 
     fn check_win_condition(&mut self) {
@@ -563,8 +556,12 @@ async fn main() {
         }
     };
 
+    // Seed RNG theo thời gian, nếu không bản web lần nào mở cũng ra cùng chuỗi bài
+    macroquad::rand::srand((macroquad::miniquad::date::now() * 1000.0) as u64);
+
     let mut current_n = 4;
-    let mut current_threshold = 1.0;
+    let mut current_threshold = 8.0; // mode Unique: K = số bài ứng viên, giữ bài khó nhất
+    let mut session: Vec<WinResult> = Vec::new();
     let mut current_mode = GameMode::Random; // Bắt đầu với Random
 
     let mut game = GameState::generate(current_n, current_threshold, current_mode);
@@ -633,6 +630,39 @@ async fn main() {
             let text_dim = measure_text(win_text, None, 40, 1.0);
             draw_text(win_text, (sw - text_dim.width) / 2.0, cy + 80.0, 40.0, GOLD);
             cy += 150.0;
+            if let Some(r) = game.win_result() {
+                let pz = game.puzzle.as_ref().unwrap();
+                let ps: Vec<f64> = session.iter().map(|w| w.p).collect();
+                let lines = [
+                    format!(
+                        "You: {} steps | Min (Hamming): {} | Efficiency: {:.0}%",
+                        r.steps,
+                        r.min_steps,
+                        100.0 * r.min_steps as f64 / r.steps.max(1) as f64
+                    ),
+                    format!(
+                        "WalkSAT from same start: median {} (p10 {} - p90 {}) | You beat {:.0}% of {} runs | p = {:.3}",
+                        pz.quantile(0.5),
+                        pz.quantile(0.1),
+                        pz.quantile(0.9),
+                        100.0 * r.faster_than,
+                        pz.ref_runs.len(),
+                        r.p
+                    ),
+                    format!(
+                        "Session: {} games | combined p (Fisher) = {:.4}   [< 0.01 = not just WalkSAT luck]",
+                        ps.len(),
+                        hard_sat::fisher_combined(&ps)
+                    ),
+                    format!("Seed: {} | K = {} | picked from {} generated instances", pz.seed, current_threshold as usize, pz.tried),
+                ];
+                for l in &lines {
+                    let d = measure_text(l, None, 22, 1.0);
+                    draw_text(l, ((sw - d.width) / 2.0).max(10.0), cy, 22.0, WHITE);
+                    cy += 30.0;
+                }
+                cy += 20.0;
+            }
         } else {
             let mut unsat_count = 0;
             for clause in &game.clauses {
@@ -746,16 +776,25 @@ async fn main() {
             YELLOW
         };
 
-        draw_text(
-            &format!(
-                "N={} | Steps: {} (P=NP: ~{}) | Sols: {} | Cur State: {} | Threshold: {:.1}%",
+        let header = if let Some(pz) = game.puzzle.as_ref() {
+            format!(
+                "N={} | Steps: {} | WalkSAT med {} [p10 {}, p90 {}] | Sols: 1 | Cur State: {} | K={}",
                 current_n,
                 game.steps,
-                target_pnp,
-                game.actual_sols,
+                pz.quantile(0.5),
+                pz.quantile(0.1),
+                pz.quantile(0.9),
                 current_state_count,
-                current_threshold
-            ),
+                current_threshold as usize
+            )
+        } else {
+            format!(
+                "N={} | Steps: {} (P=NP: ~{}) | Sols: {} | Cur State: {}",
+                current_n, game.steps, target_pnp, game.actual_sols, current_state_count
+            )
+        };
+        draw_text(
+            &header,
             10.0,
             30.0,
             font_size,
@@ -796,7 +835,7 @@ async fn main() {
         };
 
         if draw_btn("N + 1", Color::new(0.2, 0.4, 0.2, 1.0)) {
-            current_n += 1;
+            current_n = (current_n + 1).min(MAX_N);
             game = GameState::generate(current_n, current_threshold, current_mode);
             scroll_y = 0.0;
         }
@@ -804,13 +843,13 @@ async fn main() {
             game = GameState::generate(current_n, current_threshold, current_mode);
             scroll_y = 0.0;
         }
-        if draw_btn("Thresh (+)", Color::new(0.2, 0.3, 0.5, 1.0)) {
-            current_threshold += 0.5;
+        if draw_btn("Hard K (+)", Color::new(0.2, 0.3, 0.5, 1.0)) {
+            current_threshold = (current_threshold * 2.0).min(64.0);
             game = GameState::generate(current_n, current_threshold, current_mode);
             scroll_y = 0.0;
         }
-        if draw_btn("Thresh (-)", Color::new(0.5, 0.2, 0.2, 1.0)) {
-            current_threshold = (current_threshold - 0.5).max(0.1);
+        if draw_btn("Hard K (-)", Color::new(0.5, 0.2, 0.2, 1.0)) {
+            current_threshold = (current_threshold / 2.0).max(1.0);
             game = GameState::generate(current_n, current_threshold, current_mode);
             scroll_y = 0.0;
         }
@@ -901,6 +940,16 @@ async fn main() {
                     game.steps += 1;
                     game.last_flipped = Some(i);
                     game.check_win_condition();
+                    if let Some(r) = game.win_result() {
+                        session.push(r);
+                        let pz = game.puzzle.as_ref().unwrap();
+                        // Dòng log để benchmark (console trình duyệt / terminal)
+                        macroquad::logging::info!(
+                            "WIN,n={},seed={},k={},steps={},min={},walksat_med={},beat={:.2},p={:.4}",
+                            game.n, pz.seed, current_threshold as usize, r.steps, r.min_steps,
+                            pz.quantile(0.5), r.faster_than, r.p
+                        );
+                    }
 
                     *game.visited_counts.entry(game.vars.clone()).or_insert(0) += 1;
                 }
